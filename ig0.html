@@ -289,15 +289,17 @@
 <!-- ════════════════════════════════════════
      SCREEN: SPIELSTÄNDE
 ════════════════════════════════════════ -->
-<div id="screen-slots" class="screen" style="padding:0">
+<div id="screen-slots" class="screen" style="padding:0;height:100vh;overflow:hidden">
   <div class="topbar">
     <button class="topbar-back" onclick="showScreen('screen-main')">←</button>
     <span class="topbar-title">Spielstände</span>
     <span style="width:28px"></span>
   </div>
-  <div style="width:100%;max-width:480px;padding:1.2rem 1rem">
-    <div id="slots-list"></div>
-    <p class="text-muted text-center mt-2" style="font-size:0.75rem">Wähle einen Spielstand oder starte ein neues Leben</p>
+  <div style="flex:1;overflow-y:auto;width:100%;display:flex;flex-direction:column;align-items:center">
+    <div style="width:100%;max-width:480px;padding:1.2rem 1rem">
+      <div id="slots-list"></div>
+      <p class="text-muted text-center mt-2" style="font-size:0.75rem">Wähle einen Spielstand oder starte ein neues Leben</p>
+    </div>
   </div>
 </div>
 
@@ -504,7 +506,7 @@
 <script>
 // ── SAVE MANAGEMENT ──────────────────────────────────────
 const SAVE_KEY = 'mittelalter_leben_saves';
-const MAX_SLOTS = 4;
+const MAX_SLOTS = 10;
 
 function loadAllSaves() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }
