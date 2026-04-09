@@ -30,7 +30,7 @@
   html, body {
     height: 100%; background: var(--bg);
     font-family: var(--font-body); color: var(--text);
-    font-size: 16px; line-height: 1.6;
+    font-size: 17px; line-height: 1.6;
     overflow-x: hidden;
   }
 
@@ -145,6 +145,7 @@
   /* ── LOG ── */
   .log { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
   .log-entry {
+    position: relative;
     font-size: 0.82rem; padding: 4px 8px;
     background: var(--card); border-radius: 4px;
     border-left: 2px solid var(--border);
@@ -153,6 +154,51 @@
   .log-entry.bad   { border-left-color: var(--red-l); }
   .log-entry.event { border-left-color: var(--gold); }
   .log-entry .log-age { color: var(--muted); font-size: 0.72rem; margin-right: 6px; }
+  .log-entry[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+    z-index: 120;
+    max-width: 95%;
+    white-space: normal;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    color: var(--text);
+    background: var(--paper);
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    padding: 0.45rem 0.55rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  }
+
+  /* ── CHRONIK ── */
+  .chronik-wrap { width: 100%; max-width: 480px; padding: 1rem; }
+  .chronik-entry {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.7rem 0.8rem;
+    margin-bottom: 0.6rem;
+  }
+  .chronik-entry.good { border-left-color: var(--green-l); }
+  .chronik-entry.bad { border-left-color: var(--red-l); }
+  .chronik-entry.event { border-left-color: var(--gold); }
+  .chronik-meta { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.25rem; }
+  .chronik-text { font-size: 1rem; color: var(--text); line-height: 1.55; }
+  .chronik-effects { margin-top: 0.45rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .chronik-chip {
+    font-size: 0.8rem;
+    padding: 0.12rem 0.38rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .chronik-chip.good { border-color: var(--green); color: var(--green-l); }
+  .chronik-chip.bad { border-color: var(--red); color: var(--red-l); }
+  .chronik-chip.none { color: var(--muted); }
 
   /* ── MODAL ── */
   .modal-overlay {
@@ -453,7 +499,7 @@
         <span class="menu-label">Bildung</span>
         <span class="menu-sub" id="info-bildung">—</span>
       </button>
-      <button class="menu-btn" onclick="openMenu('chronik')">
+      <button class="menu-btn" onclick="openChronikScreen()">
         <span class="menu-icon">📖</span>
         <span class="menu-label">Chronik</span>
         <span class="menu-sub">Dein Leben</span>
@@ -464,6 +510,23 @@
     <div style="margin-top:0.5rem">
       <div style="font-size:0.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em">Jüngste Ereignisse</div>
       <div class="log" id="event-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN: CHRONIK
+════════════════════════════════════════ -->
+<div id="screen-chronik" class="screen" style="padding:0;align-items:stretch">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showScreen('screen-game')">←</button>
+    <span class="topbar-title">Chronik</span>
+    <span style="width:28px"></span>
+  </div>
+  <div style="flex:1;overflow-y:auto;width:100%;display:flex;justify-content:center">
+    <div class="chronik-wrap">
+      <p class="text-muted" style="font-size:0.9rem;margin-bottom:0.85rem">Alle Ereignisse deines Lebens mit Wertänderungen. Fahre mit der Maus über einen Eintrag für Details.</p>
+      <div id="chronik-list"></div>
     </div>
   </div>
 </div>
@@ -531,6 +594,21 @@ function deleteSave(slot) {
 let G = null; // active game state
 let activeSlot = null;
 let selectedOrigin = 'bauer';
+let pendingStartFitness = rnd(1, 20);
+
+function normalizeChanges(changes = {}) {
+  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
+  const out = {};
+  keys.forEach(k => {
+    if (typeof changes[k] === 'number' && changes[k] !== 0) out[k] = changes[k];
+  });
+  return out;
+}
+
+function addEventEntry(text, type = '', changes = {}) {
+  if (!G) return;
+  G.events.push({ age: G.age, text, type, changes: normalizeChanges(changes) });
+}
 
 function defaultStats(origin) {
   const bases = {
@@ -542,12 +620,12 @@ function defaultStats(origin) {
   return { ...bases[origin] };
 }
 
-function newGame(slot, name, gender, origin, startYear) {
+function newGame(slot, name, gender, origin, startYear, startFitness) {
   const s = defaultStats(origin);
   return {
     slot, name, gender, origin, year: parseInt(startYear),
     age: 0, dead: false,
-    health: s.health, luck: s.luck, fitness: rnd(1, 20), looks: s.looks,
+    health: s.health, luck: s.luck, fitness: clamp(startFitness ?? rnd(1, 20), 1, 20), looks: s.looks,
     gold: s.gold, stand: s.stand,
     bildung: 0, ansehen: 0,
     events: [],
@@ -556,6 +634,7 @@ function newGame(slot, name, gender, origin, startYear) {
     beziehungen: [],
     maxAge: 80 + rnd(0, 15),
     aktivitaetGenutzt: false,
+    heilerGenutzt: false,
   };
 }
 
@@ -608,6 +687,7 @@ function renderSlots() {
 function openCreateScreen(slot) {
   activeSlot = slot;
   selectedOrigin = 'bauer';
+  pendingStartFitness = rnd(1, 20);
   document.querySelectorAll('.origin-opt').forEach(o => o.classList.toggle('selected', o.dataset.origin === 'bauer'));
   document.getElementById('create-name').value = '';
   updateCharPreview();
@@ -631,7 +711,7 @@ function updateCharPreview() {
       <div class="char-avatar">${genderIcon(gender)}${originIcon(selectedOrigin)}</div>
       <div class="char-info">
         <div class="char-name">${esc(name)}</div>
-        <div class="char-desc">${s.stand} · ${selectedOriginLabel()}</div>
+        <div class="char-desc">${s.stand} · ${selectedOriginLabel()} · Startkraft ${statDisplayValue(pendingStartFitness)}</div>
       </div>
       <div class="char-year" style="color:var(--gold)">${s.gold} 💰</div>
     </div>`;
@@ -645,8 +725,8 @@ function startNewGame() {
   if (!name) { alert('Bitte gib deinem Charakter einen Namen.'); return; }
   const gender = document.getElementById('create-gender').value;
   const year = document.getElementById('create-year').value;
-  G = newGame(activeSlot, name, gender, selectedOrigin, year);
-  G.events.push({ age: 0, text: `${name} wurde geboren — eine neue Seele betritt die Welt.`, type: 'event' });
+  G = newGame(activeSlot, name, gender, selectedOrigin, year, pendingStartFitness);
+  addEventEntry(`${name} wurde geboren — eine neue Seele betritt die Welt.`, 'event');
   writeSave(activeSlot, G);
   renderGame();
   showScreen('screen-game');
@@ -723,8 +803,77 @@ function renderLog() {
     const div = document.createElement('div');
     div.className = 'log-entry ' + (e.type || '');
     div.innerHTML = `<span class="log-age">Alter ${e.age}:</span>${esc(e.text)}`;
+    const tip = chronikTooltip(e.changes || {});
+    if (tip) {
+      div.setAttribute('data-tip', tip);
+      div.title = tip;
+    }
     log.appendChild(div);
   });
+}
+
+function openChronikScreen() {
+  if (!G) return;
+  renderChronik();
+  showScreen('screen-chronik');
+}
+
+function formatDelta(n) {
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`;
+}
+
+function chronikTooltip(changes = {}) {
+  const labels = {
+    gold: 'Gold',
+    health: 'Gesundheit',
+    fitness: 'Kraft',
+    luck: 'Glück',
+    looks: 'Ansehen',
+    bildung: 'Bildung',
+  };
+  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
+  const parts = keys
+    .filter(key => typeof changes[key] === 'number' && changes[key] !== 0)
+    .map(key => `${labels[key]}: ${formatDelta(changes[key])}`);
+  return parts.join(' | ');
+}
+
+function renderChronikEffects(changes = {}) {
+  const labels = {
+    gold: 'Gold',
+    health: 'Gesundheit',
+    fitness: 'Kraft',
+    luck: 'Glück',
+    looks: 'Ansehen',
+    bildung: 'Bildung',
+  };
+  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
+  const chips = [];
+  keys.forEach(k => {
+    const val = changes[k] || 0;
+    if (val === 0) return;
+    chips.push(`<span class="chronik-chip ${val > 0 ? 'good' : 'bad'}">${labels[k]} ${formatDelta(val)}</span>`);
+  });
+  return chips.length ? chips.join('') : '<span class="chronik-chip none">Keine direkten Werteänderungen</span>';
+}
+
+function renderChronik() {
+  const list = document.getElementById('chronik-list');
+  if (!G || !list) return;
+  if (!G.events.length) {
+    list.innerHTML = '<p class="text-muted">Noch keine Ereignisse.</p>';
+    return;
+  }
+  const entries = [...G.events].reverse();
+  list.innerHTML = entries.map(e => {
+    return `
+      <div class="chronik-entry ${e.type || ''}">
+        <div class="chronik-meta">Alter ${e.age}</div>
+        <div class="chronik-text">${esc(e.text)}</div>
+        <div class="chronik-effects">${renderChronikEffects(e.changes || {})}</div>
+      </div>`;
+  }).join('');
 }
 
 // ── AGE UP ───────────────────────────────────────────────
@@ -733,6 +882,7 @@ function ageUp() {
   G.age++;
   G.year++;
   G.aktivitaetGenutzt = false;
+  G.heilerGenutzt = false;
 
   // Natural aging effects
   if (G.age > 40) G.health -= rnd(1,3);
@@ -741,20 +891,21 @@ function ageUp() {
 
   // Random event
   const event = rollEvent();
-  G.events.push({ age: G.age, text: event.text, type: event.type });
   applyEffects(event.effects || {});
+  addEventEntry(event.text, event.type, event.effects || {});
 
   // Death check
   if (G.health <= 0 || G.age >= (G.maxAge || 80 + rnd(0, 15))) {
+    const healthBeforeDeath = G.health;
     const diedFromHealth = G.health <= 0;
     G.dead = true;
     G.health = 0;
     const cause = diedFromHealth ? deathCause() : 'hohem Alter';
-    G.events.push({ age: G.age, text: `${G.name} starb an ${cause}. Möge die Seele in Frieden ruhen.`, type: 'bad' });
+    addEventEntry(`${G.name} starb an ${cause}. Möge die Seele in Frieden ruhen.`, 'bad', { health: -healthBeforeDeath });
     writeSave(activeSlot, G);
     renderGame();
     showModal(`† ${G.name}`, `Du hast dein Leben in einem Alter von <strong>${G.age} Jahren</strong> im Jahre ${G.year} beendet. ${G.name} wird in Erinnerung bleiben als ${G.stand} aus ${originLabel(G.origin)}.<br><br><em>„${eulogy()}"</em>`, [
-      { label: 'Chronik lesen', action: () => { closeModal(); openMenu('chronik'); } },
+      { label: 'Chronik lesen', action: () => { closeModal(); openChronikScreen(); } },
       { label: 'Hauptmenü', action: () => { closeModal(); saveAndExit(); } }
     ]);
     return;
@@ -764,7 +915,7 @@ function ageUp() {
   renderGame();
 
   if (event.type === 'event' || event.type === 'bad' || event.important) {
-    showModal(`Jahr ${G.year} · Alter ${G.age}`, event.text, [
+    showModal(`Jahr ${G.year} · Alter ${G.age}`, esc(event.text), [
       ...(event.choices || []),
       { label: 'Weiter', action: closeModal }
     ]);
@@ -809,6 +960,10 @@ function applyEffects(fx) {
 
 // ── MENU ACTIONS ─────────────────────────────────────────
 function openMenu(which) {
+  if (which === 'chronik') {
+    openChronikScreen();
+    return;
+  }
   const menus = {
     familie: {
       title: '👪 Familie',
@@ -845,9 +1000,11 @@ function openMenu(which) {
       `,
       actions: [
         { label: `Heiler aufsuchen (15 💰)`, action: () => {
+          if (G.heilerGenutzt) { closeModal(); showModal('Heiler', 'Du hast in diesem Jahr bereits einen Heiler aufgesucht.', [{ label: 'Ok', action: closeModal }]); return; }
           if (G.gold < 15) { closeModal(); showModal('Heiler', 'Du hast nicht genug Gold.', [{ label: 'Ok', action: closeModal }]); return; }
+          G.heilerGenutzt = true;
           G.gold -= 15; const gain = rnd(10,20); G.health = clamp(G.health+gain, 0, 100);
-          G.events.push({ age: G.age, text: `Du hast einen Heiler aufgesucht und fühlst dich ${gain} Punkte besser.`, type: 'good' });
+          addEventEntry(`Du hast einen Heiler aufgesucht und fühlst dich ${gain} Punkte besser.`, 'good', { gold: -15, health: gain });
           writeSave(activeSlot, G); renderGame(); closeModal();
         }},
         { label: 'Schließen', action: closeModal }
@@ -874,15 +1031,15 @@ function openMenu(which) {
       ] : [
         { label: G.age <= 7 ? '🧸 Spielen (+Kraft)' : '⚔️ Waffenübung (+Kraft)', action: () => {
           G.aktivitaetGenutzt = true;
-          const gain = G.age <= 7 ? 0.5 : 1;
+          const gain = G.age <= 7 ? 2 : 3;
           G.fitness = clamp(G.fitness+gain,0,100);
-          G.events.push({ age: G.age, text: G.age <= 7 ? 'Du spielst ausgelassen und wirst dabei ein kleines bisschen stärker.' : 'Du übst fleißig mit Schwert und Schild.', type: 'good' });
+          addEventEntry(G.age <= 7 ? 'Du spielst ausgelassen und wirst dabei ein kleines bisschen stärker.' : 'Du übst fleißig mit Schwert und Schild.', 'good', { fitness: gain });
           writeSave(activeSlot, G); renderGame();
           showModal(
             G.age <= 7 ? '🧸 Spielen' : '⚔️ Waffenübung',
             G.age <= 7
-              ? `Du tobst und spielst: <span style="color:var(--blue-l)">+0,5 Kraft</span>.`
-              : `Du trainierst hart und gewinnst <span style="color:var(--blue-l)">+1 Kraft</span>.`,
+              ? `Du tobst und spielst: <span style="color:var(--blue-l)">+2 Kraft</span>.`
+              : `Du trainierst hart und gewinnst <span style="color:var(--blue-l)">+3 Kraft</span>.`,
             [{ label: 'Gut!', action: closeModal }]
           );
         }},
@@ -890,7 +1047,7 @@ function openMenu(which) {
           if (G.gold < 5) { showModal('Bildung', 'Du brauchst 5 Pfennig für Tinte und Pergament.', [{label:'Ok',action:closeModal}]); return; }
           G.aktivitaetGenutzt = true;
           G.gold -= 5; const gainB = rnd(5,10); G.bildung = clamp(G.bildung+gainB,0,100);
-          G.events.push({ age: G.age, text: 'Du verbringst Stunden damit, das Schreiben zu üben.', type: 'good' });
+          addEventEntry('Du verbringst Stunden damit, das Schreiben zu üben.', 'good', { gold: -5, bildung: gainB });
           writeSave(activeSlot, G); renderGame();
           showModal('📜 Schreiben lernen', `Du lernst eifrig: <span style="color:var(--gold)">+${gainB} Bildung</span> · <span style="color:var(--red-l)">−5 💰</span>`, [{ label: 'Gut!', action: closeModal }]);
         }},
@@ -898,7 +1055,7 @@ function openMenu(which) {
           G.aktivitaetGenutzt = true;
           const cost = rnd(2,8); const gainL = rnd(5,12);
           G.gold = Math.max(0, G.gold-cost); G.luck = clamp(G.luck+gainL,0,100);
-          G.events.push({ age: G.age, text: 'Du feierst im Wirtshaus und triffst viele interessante Leute.', type: 'good' });
+          addEventEntry('Du feierst im Wirtshaus und triffst viele interessante Leute.', 'good', { gold: -cost, luck: gainL });
           writeSave(activeSlot, G); renderGame();
           showModal('🍺 Wirtshaus', `Ein fröhlicher Abend! <span style="color:var(--gold)">+${gainL} Glück</span> · <span style="color:var(--red-l)">−${cost} 💰</span>`, [{ label: 'Prost!', action: closeModal }]);
         }},
@@ -965,6 +1122,7 @@ document.getElementById('modal-overlay').addEventListener('click', function(e) {
 function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 function genderIcon(g) { return g === 'f' ? '👩' : '👨'; }
 function originIcon(o) { return { bauer:'🌾', adel:'⚜️', kaufmann:'💰', klerus:'✝️' }[o] || ''; }
