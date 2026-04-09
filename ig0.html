@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Mittelalter Leben</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0d0a06;
+    --paper:     #1a1208;
+    --card:      #241a0e;
+    --card2:     #2e2010;
+    --border:    #4a3520;
+    --gold:      #c9a227;
+    --gold-l:    #e8c96a;
+    --text:      #d4c4a0;
+    --muted:     #7a6a4a;
+    --red:       #9b3030;
+    --red-l:     #d45555;
+    --green:     #3a6c2a;
+    --green-l:   #5fa84a;
+    --blue:      #2a4a6a;
+    --blue-l:    #5a8ab8;
+    --radius:    8px;
+    --font-head: 'Cinzel', serif;
+    --font-body: 'Lora', serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; background: var(--bg);
+    font-family: var(--font-body); color: var(--text);
+    font-size: 16px; line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; min-height: 100vh; flex-direction: column; align-items: center; }
+  .screen.active { display: flex; }
+
+  /* ── DECORATIVE BORDER ── */
+  .frame {
+    width: 100%; max-width: 480px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    position: relative;
+  }
+  .frame::before, .frame::after {
+    content: '✦'; font-size: 10px; color: var(--gold);
+    position: absolute; opacity: 0.6;
+  }
+  .frame::before { top: 8px; left: 12px; }
+  .frame::after  { top: 8px; right: 12px; }
+
+  /* ── TYPOGRAPHY ── */
+  h1 { font-family: var(--font-head); font-size: 2.2rem; color: var(--gold); letter-spacing: 0.06em; line-height: 1.2; }
+  h2 { font-family: var(--font-head); font-size: 1.3rem; color: var(--gold-l); letter-spacing: 0.04em; margin-bottom: 1rem; }
+  h3 { font-family: var(--font-head); font-size: 1rem; color: var(--gold); }
+  .subtitle { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.25rem; }
+  .italic { font-style: italic; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: block; width: 100%; padding: 0.7rem 1rem;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text);
+    font-family: var(--font-body); font-size: 0.95rem;
+    cursor: pointer; text-align: left;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .btn:hover { background: var(--card2); border-color: var(--gold); color: var(--gold-l); }
+  .btn:active { opacity: 0.8; }
+  .btn-gold {
+    background: var(--gold); border-color: var(--gold-l);
+    color: #1a1208; font-weight: 500; text-align: center;
+    font-family: var(--font-head); letter-spacing: 0.05em;
+  }
+  .btn-gold:hover { background: var(--gold-l); color: #0d0a06; }
+  .btn-danger { border-color: var(--red); color: var(--red-l); }
+  .btn-danger:hover { background: #3a1010; border-color: var(--red-l); color: var(--red-l); }
+  .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; }
+  .btn-row { display: flex; gap: 0.5rem; }
+  .btn-row .btn { flex: 1; }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+  .divider-gold { border-top-color: var(--gold); opacity: 0.3; }
+
+  /* ── STAT BAR ── */
+  .stat-bar { height: 8px; border-radius: 4px; background: var(--card2); overflow: hidden; }
+  .stat-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+  .bar-health  .stat-bar-fill { background: var(--green-l); }
+  .bar-luck    .stat-bar-fill { background: var(--gold); }
+  .bar-fitness .stat-bar-fill { background: var(--blue-l); }
+  .bar-looks   .stat-bar-fill { background: #c084b8; }
+
+  /* ── STAT GRID ── */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .stat-item label {
+    font-size: 0.72rem; color: var(--muted);
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .stat-value {
+    color: var(--gold-l);
+    font-family: var(--font-head);
+    font-size: 0.66rem;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── CHARACTER HEADER ── */
+  .char-header {
+    display: flex; align-items: center; gap: 1rem;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+  }
+  .char-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: var(--card2); border: 1px solid var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; flex-shrink: 0;
+  }
+  .char-info { flex: 1; min-width: 0; }
+  .char-name { font-family: var(--font-head); font-size: 1rem; color: var(--gold-l); }
+  .char-desc { font-size: 0.8rem; color: var(--muted); }
+  .char-year { font-size: 0.8rem; color: var(--muted); text-align: right; white-space: nowrap; }
+
+  /* ── MENU GRID ── */
+  .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem; }
+  .menu-btn {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.9rem 0.7rem;
+    cursor: pointer; text-align: center;
+    transition: background 0.15s, border-color 0.15s;
+    color: var(--text);
+  }
+  .menu-btn:hover { background: var(--card2); border-color: var(--gold); }
+  .menu-btn .menu-icon { font-size: 1.5rem; display: block; margin-bottom: 4px; }
+  .menu-btn .menu-label { font-size: 0.75rem; font-family: var(--font-head); color: var(--gold-l); letter-spacing: 0.06em; display: block; }
+  .menu-btn .menu-sub { font-size: 0.68rem; color: var(--muted); display: block; }
+
+  /* ── LOG ── */
+  .log { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .log-entry {
+    font-size: 0.82rem; padding: 4px 8px;
+    background: var(--card); border-radius: 4px;
+    border-left: 2px solid var(--border);
+  }
+  .log-entry.good  { border-left-color: var(--green-l); }
+  .log-entry.bad   { border-left-color: var(--red-l); }
+  .log-entry.event { border-left-color: var(--gold); }
+  .log-entry .log-age { color: var(--muted); font-size: 0.72rem; margin-right: 6px; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--paper); border: 1px solid var(--gold);
+    border-radius: var(--radius); padding: 1.5rem;
+    width: 100%; max-width: 400px;
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { transform: scale(0.93); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .modal-title { font-family: var(--font-head); color: var(--gold); margin-bottom: 0.75rem; }
+  .modal-text { font-size: 0.9rem; color: var(--text); margin-bottom: 1rem; line-height: 1.6; }
+
+  /* ── SAVE SLOT ── */
+  .save-slot {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.8rem 1rem;
+    margin-bottom: 0.6rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .save-slot:hover { border-color: var(--gold); cursor: pointer; background: var(--card2); }
+  .slot-icon { font-size: 1.4rem; flex-shrink: 0; }
+  .slot-info { flex: 1; min-width: 0; }
+  .slot-name { font-family: var(--font-head); font-size: 0.95rem; color: var(--gold-l); }
+  .slot-meta { font-size: 0.75rem; color: var(--muted); }
+  .slot-empty .slot-name { color: var(--muted); font-style: italic; }
+  .slot-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+  /* ── FORM ── */
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .form-group input, .form-group select {
+    width: 100%; padding: 0.6rem 0.8rem;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text);
+    font-family: var(--font-body); font-size: 0.95rem;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none; border-color: var(--gold);
+  }
+  .form-group select option { background: var(--card); }
+  .origin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .origin-opt {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.6rem;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .origin-opt:hover, .origin-opt.selected {
+    border-color: var(--gold); background: var(--card2);
+  }
+  .origin-opt.selected { border-color: var(--gold-l); }
+  .origin-icon { font-size: 1.3rem; display: block; }
+  .origin-name { font-size: 0.78rem; color: var(--gold-l); font-family: var(--font-head); }
+  .origin-desc { font-size: 0.68rem; color: var(--muted); }
+
+  /* ── MAIN MENU SCREEN ── */
+  #screen-main { padding: 3rem 1rem 2rem; justify-content: center; }
+  .main-logo { text-align: center; margin-bottom: 2.5rem; }
+  .main-logo .ornament { font-size: 2rem; color: var(--gold); opacity: 0.6; letter-spacing: 0.3em; }
+  .main-logo h1 { margin: 0.25rem 0; }
+  .main-logo .tagline { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.2em; }
+  .main-menu-btns { display: flex; flex-direction: column; gap: 0.6rem; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 0.6rem 1rem;
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%;
+  }
+  .topbar-back { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 4px; }
+  .topbar-back:hover { color: var(--gold); }
+  .topbar-title { font-family: var(--font-head); font-size: 0.9rem; color: var(--gold-l); letter-spacing: 0.05em; }
+
+  /* ── MISC ── */
+  .text-center { text-align: center; }
+  .text-muted { color: var(--muted); font-size: 0.85rem; }
+  .text-gold { color: var(--gold); }
+  .text-good { color: var(--green-l); }
+  .text-bad  { color: var(--red-l); }
+  .mt-1 { margin-top: 0.5rem; }
+  .mt-2 { margin-top: 1rem; }
+  .mt-3 { margin-top: 1.5rem; }
+  .mb-1 { margin-bottom: 0.5rem; }
+  .mb-2 { margin-bottom: 1rem; }
+  .gap-1 { gap: 0.5rem; }
+  .flex { display: flex; }
+  .justify-between { justify-content: space-between; }
+  .align-center { align-items: center; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--paper); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* Wider layout on desktop */
+  @media (min-width: 600px) {
+    .frame { padding: 2rem; }
+    #screen-main { padding: 4rem 1rem 2rem; }
+    .menu-grid { gap: 0.8rem; }
+    .menu-btn { padding: 1.1rem 0.9rem; }
+    .menu-btn .menu-icon { font-size: 1.8rem; }
+    .menu-btn .menu-label { font-size: 0.82rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     SCREEN: HAUPTMENÜ
+════════════════════════════════════════ -->
+<div id="screen-main" class="screen active">
+  <div class="frame" style="max-width:380px">
+    <div class="main-logo">
+      <div class="ornament">⚜ ⚔ ⚜</div>
+      <h1>Mittelalter<br>Leben</h1>
+      <div class="tagline">Dein Schicksal. Deine Geschichte.</div>
+    </div>
+    <div class="main-menu-btns">
+      <button class="btn btn-gold" onclick="showSlots()">Spielen</button>
+      <button class="btn" onclick="showScreen('screen-credits')">Über das Spiel</button>
+    </div>
+    <p class="text-muted text-center mt-2" style="font-size:0.72rem">Anno Domini · v0.1</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN: SPIELSTÄNDE
+════════════════════════════════════════ -->
+<div id="screen-slots" class="screen" style="padding:0">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showScreen('screen-main')">←</button>
+    <span class="topbar-title">Spielstände</span>
+    <span style="width:28px"></span>
+  </div>
+  <div style="width:100%;max-width:480px;padding:1.2rem 1rem">
+    <div id="slots-list"></div>
+    <p class="text-muted text-center mt-2" style="font-size:0.75rem">Wähle einen Spielstand oder starte ein neues Leben</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN: CHARAKTER-ERSTELLUNG
+════════════════════════════════════════ -->
+<div id="screen-create" class="screen" style="padding:0">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showSlots()">←</button>
+    <span class="topbar-title">Neues Leben</span>
+    <span style="width:28px"></span>
+  </div>
+  <div style="width:100%;max-width:480px;padding:1.2rem 1rem">
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" id="create-name" placeholder="z.B. Heinrich" maxlength="24">
+    </div>
+    <div class="form-group">
+      <label>Geschlecht</label>
+      <select id="create-gender">
+        <option value="m">Männlich</option>
+        <option value="f">Weiblich</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Herkunft</label>
+      <div class="origin-grid" id="origin-grid">
+        <div class="origin-opt selected" data-origin="bauer" onclick="selectOrigin(this)">
+          <span class="origin-icon">🌾</span>
+          <span class="origin-name">Bauer</span>
+          <span class="origin-desc">Viel Arbeit, wenig Gold</span>
+        </div>
+        <div class="origin-opt" data-origin="adel" onclick="selectOrigin(this)">
+          <span class="origin-icon">⚜️</span>
+          <span class="origin-name">Adel</span>
+          <span class="origin-desc">Reichtum & Pflichten</span>
+        </div>
+        <div class="origin-opt" data-origin="kaufmann" onclick="selectOrigin(this)">
+          <span class="origin-icon">💰</span>
+          <span class="origin-name">Kaufmann</span>
+          <span class="origin-desc">Handel bringt Glück</span>
+        </div>
+        <div class="origin-opt" data-origin="klerus" onclick="selectOrigin(this)">
+          <span class="origin-icon">✝️</span>
+          <span class="origin-name">Klerus</span>
+          <span class="origin-desc">Gott & Gelehrsamkeit</span>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Startjahr</label>
+      <select id="create-year">
+        <option value="1050">1050 – Frühes Mittelalter</option>
+        <option value="1150" selected>1150 – Hochmittelalter</option>
+        <option value="1300">1300 – Spätmittelalter</option>
+        <option value="1400">1400 – Ende des Mittelalters</option>
+      </select>
+    </div>
+    <hr class="divider">
+    <div id="char-preview" style="margin-bottom:1rem"></div>
+    <button class="btn btn-gold" onclick="startNewGame()">Leben beginnen ✦</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN: HAUPTSPIEL
+════════════════════════════════════════ -->
+<div id="screen-game" class="screen" style="padding:0;align-items:stretch">
+  <div class="topbar">
+    <button class="topbar-back" onclick="saveAndExit()">← Speichern</button>
+    <span class="topbar-title" id="game-topbar-title">Leben</span>
+    <span style="font-size:0.75rem;color:var(--muted)" id="game-year-display"></span>
+  </div>
+
+  <div style="flex:1;overflow-y:auto;padding:0.8rem 1rem 2rem;width:100%;max-width:480px;margin:0 auto">
+
+    <!-- Charakter-Kopf -->
+    <div class="char-header">
+      <div class="char-avatar" id="game-avatar"></div>
+      <div class="char-info">
+        <div class="char-name" id="game-name"></div>
+        <div class="char-desc" id="game-desc"></div>
+      </div>
+      <div class="char-year" id="game-age-display"></div>
+    </div>
+
+    <!-- Attribut-Balken -->
+    <div class="stat-grid mb-2">
+      <div class="stat-item bar-health">
+        <label>Gesundheit <span class="stat-value" id="value-health">0/100</span></label>
+        <div class="stat-bar"><div class="stat-bar-fill" id="bar-health"></div></div>
+      </div>
+      <div class="stat-item bar-luck">
+        <label>Glück <span class="stat-value" id="value-luck">0/100</span></label>
+        <div class="stat-bar"><div class="stat-bar-fill" id="bar-luck"></div></div>
+      </div>
+      <div class="stat-item bar-fitness">
+        <label>Kraft <span class="stat-value" id="value-fitness">0/100</span></label>
+        <div class="stat-bar"><div class="stat-bar-fill" id="bar-fitness"></div></div>
+      </div>
+      <div class="stat-item bar-looks">
+        <label>Ansehen <span class="stat-value" id="value-looks">0/100</span></label>
+        <div class="stat-bar"><div class="stat-bar-fill" id="bar-looks"></div></div>
+      </div>
+    </div>
+
+    <!-- Gold & Info -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;font-size:0.85rem">
+      <span><span style="color:var(--gold)">💰</span> <span id="game-gold"></span> Pfennig</span>
+      <span><span style="color:var(--muted)">Stand:</span> <span id="game-stand" style="color:var(--text)"></span></span>
+    </div>
+
+    <!-- Haupt-Aktionsknöpfe -->
+    <button class="btn btn-gold mb-2" onclick="ageUp()" id="btn-age-up">
+      ⏳ Jahr voranschreiten
+    </button>
+
+    <div class="menu-grid">
+      <button class="menu-btn" onclick="openMenu('familie')">
+        <span class="menu-icon">👪</span>
+        <span class="menu-label">Familie</span>
+        <span class="menu-sub" id="info-familie">—</span>
+      </button>
+      <button class="menu-btn" onclick="openMenu('beruf')">
+        <span class="menu-icon">⚒️</span>
+        <span class="menu-label">Beruf</span>
+        <span class="menu-sub" id="info-beruf">—</span>
+      </button>
+      <button class="menu-btn" onclick="openMenu('gesundheit')">
+        <span class="menu-icon">🌿</span>
+        <span class="menu-label">Gesundheit</span>
+        <span class="menu-sub" id="info-gesundheit">—</span>
+      </button>
+      <button class="menu-btn" onclick="openMenu('vermoegen')">
+        <span class="menu-icon">🏺</span>
+        <span class="menu-label">Vermögen</span>
+        <span class="menu-sub" id="info-vermoegen">—</span>
+      </button>
+      <button class="menu-btn" onclick="openMenu('aktivitaeten')">
+        <span class="menu-icon">🎯</span>
+        <span class="menu-label">Aktivitäten</span>
+        <span class="menu-sub">Erkunden</span>
+      </button>
+      <button class="menu-btn" onclick="openMenu('beziehungen')">
+        <span class="menu-icon">🤝</span>
+        <span class="menu-label">Beziehungen</span>
+        <span class="menu-sub" id="info-bez">—</span>
+      </button>
+      <button class="menu-btn" onclick="openMenu('bildung')">
+        <span class="menu-icon">📜</span>
+        <span class="menu-label">Bildung</span>
+        <span class="menu-sub" id="info-bildung">—</span>
+      </button>
+      <button class="menu-btn" onclick="openMenu('chronik')">
+        <span class="menu-icon">📖</span>
+        <span class="menu-label">Chronik</span>
+        <span class="menu-sub">Dein Leben</span>
+      </button>
+    </div>
+
+    <!-- Ereignis-Log -->
+    <div style="margin-top:0.5rem">
+      <div style="font-size:0.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em">Jüngste Ereignisse</div>
+      <div class="log" id="event-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN: CREDITS
+════════════════════════════════════════ -->
+<div id="screen-credits" class="screen" style="padding:0">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showScreen('screen-main')">←</button>
+    <span class="topbar-title">Über das Spiel</span>
+    <span style="width:28px"></span>
+  </div>
+  <div style="width:100%;max-width:480px;padding:1.5rem 1rem">
+    <div class="frame">
+      <h2>Mittelalter Leben</h2>
+      <p style="font-size:0.88rem;margin-bottom:0.75rem">Ein Lebenssimulator im Mittelalter — inspiriert von BitLife. Lebe dein Leben von der Geburt bis zum Tod, triff Entscheidungen und forme dein Schicksal.</p>
+      <hr class="divider">
+      <p style="font-size:0.8rem;color:var(--muted)" class="italic">„Das Schicksal ist ein blinder Schreiber — doch du führst die Feder."</p>
+      <hr class="divider">
+      <p style="font-size:0.75rem;color:var(--muted)">Version 0.1 · Grundgerüst<br>Erweiterbar & Open Source</p>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     MODAL: EREIGNIS / MENÜINHALT
+════════════════════════════════════════ -->
+<div id="modal-overlay" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Titel</div>
+    <div class="modal-text" id="modal-body">Inhalt</div>
+    <div id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════ -->
+<script>
+// ── SAVE MANAGEMENT ──────────────────────────────────────
+const SAVE_KEY = 'mittelalter_leben_saves';
+const MAX_SLOTS = 4;
+
+function loadAllSaves() {
+  try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }
+  catch(e) { return {}; }
+}
+function saveAllSaves(data) {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+}
+function getSave(slot) { return loadAllSaves()[slot] || null; }
+function writeSave(slot, data) {
+  const all = loadAllSaves();
+  all[slot] = data;
+  saveAllSaves(all);
+}
+function deleteSave(slot) {
+  const all = loadAllSaves();
+  delete all[slot];
+  saveAllSaves(all);
+}
+
+// ── GAME STATE ───────────────────────────────────────────
+let G = null; // active game state
+let activeSlot = null;
+let selectedOrigin = 'bauer';
+
+function defaultStats(origin) {
+  const bases = {
+    bauer:     { health:70, luck:50, fitness:75, looks:45, gold:20,  stand:'Leibeigener' },
+    adel:      { health:65, luck:65, fitness:50, looks:70, gold:500, stand:'Junker' },
+    kaufmann:  { health:60, luck:70, fitness:50, looks:60, gold:200, stand:'Händler' },
+    klerus:    { health:65, luck:60, fitness:40, looks:50, gold:80,  stand:'Novize' },
+  };
+  return { ...bases[origin] };
+}
+
+function newGame(slot, name, gender, origin, startYear) {
+  const s = defaultStats(origin);
+  return {
+    slot, name, gender, origin, year: parseInt(startYear),
+    age: 0, dead: false,
+    health: s.health, luck: s.luck, fitness: rnd(1, 20), looks: s.looks,
+    gold: s.gold, stand: s.stand,
+    bildung: 0, ansehen: 0,
+    events: [],
+    family: { vater: randomName('m'), mutter: randomName('f'), geschwister: rnd(0,3) },
+    beruf: origin === 'bauer' ? 'Feldarbeit' : origin === 'adel' ? 'Müßiggang' : origin === 'kaufmann' ? 'Warenhandel' : 'Gebet',
+    beziehungen: [],
+    maxAge: 80 + rnd(0, 15),
+    aktivitaetGenutzt: false,
+  };
+}
+
+// ── SCREEN NAV ───────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function showSlots() {
+  renderSlots();
+  showScreen('screen-slots');
+}
+
+function renderSlots() {
+  const all = loadAllSaves();
+  const list = document.getElementById('slots-list');
+  list.innerHTML = '';
+  for (let i = 1; i <= MAX_SLOTS; i++) {
+    const save = all[i] || null;
+    const div = document.createElement('div');
+    div.className = 'save-slot' + (save ? '' : ' slot-empty');
+    if (save) {
+      const icon = genderIcon(save.gender) + originIcon(save.origin);
+      div.innerHTML = `
+        <div class="slot-icon">${icon}</div>
+        <div class="slot-info">
+          <div class="slot-name">${esc(save.name)}</div>
+          <div class="slot-meta">${save.age} Jahre · ${save.year} n. Chr. · ${esc(save.stand)}</div>
+        </div>
+        <div class="slot-actions">
+          <button class="btn btn-sm" onclick="loadGame(${i});event.stopPropagation()">Laden</button>
+          <button class="btn btn-sm btn-danger" onclick="confirmDelete(${i});event.stopPropagation()">✕</button>
+        </div>`;
+      div.onclick = () => loadGame(i);
+    } else {
+      div.innerHTML = `
+        <div class="slot-icon">＋</div>
+        <div class="slot-info">
+          <div class="slot-name">Leerer Spielstand ${i}</div>
+          <div class="slot-meta">Neues Leben beginnen</div>
+        </div>`;
+      div.onclick = () => openCreateScreen(i);
+    }
+    list.appendChild(div);
+  }
+}
+
+function openCreateScreen(slot) {
+  activeSlot = slot;
+  selectedOrigin = 'bauer';
+  document.querySelectorAll('.origin-opt').forEach(o => o.classList.toggle('selected', o.dataset.origin === 'bauer'));
+  document.getElementById('create-name').value = '';
+  updateCharPreview();
+  showScreen('screen-create');
+}
+
+function selectOrigin(el) {
+  selectedOrigin = el.dataset.origin;
+  document.querySelectorAll('.origin-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  updateCharPreview();
+}
+
+function updateCharPreview() {
+  const name = document.getElementById('create-name').value || '???';
+  const gender = document.getElementById('create-gender').value;
+  const s = defaultStats(selectedOrigin);
+  const prev = document.getElementById('char-preview');
+  prev.innerHTML = `
+    <div class="char-header" style="margin-bottom:0">
+      <div class="char-avatar">${genderIcon(gender)}${originIcon(selectedOrigin)}</div>
+      <div class="char-info">
+        <div class="char-name">${esc(name)}</div>
+        <div class="char-desc">${s.stand} · ${selectedOriginLabel()}</div>
+      </div>
+      <div class="char-year" style="color:var(--gold)">${s.gold} 💰</div>
+    </div>`;
+}
+
+document.getElementById('create-name').addEventListener('input', updateCharPreview);
+document.getElementById('create-gender').addEventListener('change', updateCharPreview);
+
+function startNewGame() {
+  const name = document.getElementById('create-name').value.trim();
+  if (!name) { alert('Bitte gib deinem Charakter einen Namen.'); return; }
+  const gender = document.getElementById('create-gender').value;
+  const year = document.getElementById('create-year').value;
+  G = newGame(activeSlot, name, gender, selectedOrigin, year);
+  G.events.push({ age: 0, text: `${name} wurde geboren — eine neue Seele betritt die Welt.`, type: 'event' });
+  writeSave(activeSlot, G);
+  renderGame();
+  showScreen('screen-game');
+}
+
+function loadGame(slot) {
+  const save = getSave(slot);
+  if (!save) return;
+  G = save;
+  activeSlot = slot;
+  renderGame();
+  showScreen('screen-game');
+}
+
+function saveAndExit() {
+  if (G) writeSave(activeSlot, G);
+  showSlots();
+}
+
+function confirmDelete(slot) {
+  const save = getSave(slot);
+  if (!save) return;
+  showModal(`Spielstand löschen?`, `Bist du sicher, dass du das Leben von <strong>${esc(save.name)}</strong> unwiderruflich beenden möchtest?`, [
+    { label: 'Löschen', danger: true, action: () => { deleteSave(slot); closeModal(); renderSlots(); } },
+    { label: 'Abbrechen', action: closeModal }
+  ]);
+}
+
+// ── GAME RENDER ──────────────────────────────────────────
+function renderGame() {
+  if (!G) return;
+  const icon = genderIcon(G.gender) + originIcon(G.origin);
+  document.getElementById('game-avatar').textContent = icon;
+  document.getElementById('game-name').textContent = G.name;
+  document.getElementById('game-desc').textContent = `${G.stand} · ${originLabel(G.origin)}`;
+  document.getElementById('game-age-display').textContent = `${G.age} Jahre`;
+  document.getElementById('game-year-display').textContent = `${G.year} n. Chr.`;
+  document.getElementById('game-topbar-title').textContent = G.dead ? '† ' + G.name : G.name;
+  document.getElementById('game-gold').textContent = G.gold.toLocaleString('de-DE');
+  document.getElementById('game-stand').textContent = G.stand;
+  setBar('bar-health', G.health);
+  setBar('bar-luck',   G.luck);
+  setBar('bar-fitness',G.fitness);
+  setBar('bar-looks',  G.looks);
+  document.getElementById('value-health').textContent = statDisplayValue(G.health);
+  document.getElementById('value-luck').textContent = statDisplayValue(G.luck);
+  document.getElementById('value-fitness').textContent = statDisplayValue(G.fitness);
+  document.getElementById('value-looks').textContent = statDisplayValue(G.looks);
+  document.getElementById('info-familie').textContent   = G.family.vater ? `Vater, Mutter, ${G.family.geschwister === 0 ? 'keine' : G.family.geschwister} Geschwister` : '—';
+  document.getElementById('info-beruf').textContent     = G.beruf || '—';
+  document.getElementById('info-gesundheit').textContent= healthLabel(G.health);
+  document.getElementById('info-vermoegen').textContent = G.gold + ' Pfennig';
+  document.getElementById('info-bez').textContent       = G.beziehungen.length + ' Personen';
+  document.getElementById('info-bildung').textContent   = bildungLabel(G.bildung);
+  document.getElementById('btn-age-up').disabled        = G.dead;
+  document.getElementById('btn-age-up').textContent = G.dead ? '† Gestorben' : '⏳ Jahr voranschreiten';
+  renderLog();
+}
+
+function setBar(id, val) {
+  document.getElementById(id).style.width = Math.max(0, Math.min(100, val)) + '%';
+}
+
+function statDisplayValue(v) {
+  const rounded = Math.round(v * 10) / 10;
+  return `${rounded.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/100`;
+}
+
+function renderLog() {
+  const log = document.getElementById('event-log');
+  log.innerHTML = '';
+  const recent = [...G.events].reverse().slice(0, 15);
+  recent.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-entry ' + (e.type || '');
+    div.innerHTML = `<span class="log-age">Alter ${e.age}:</span>${esc(e.text)}`;
+    log.appendChild(div);
+  });
+}
+
+// ── AGE UP ───────────────────────────────────────────────
+function ageUp() {
+  if (!G || G.dead) return;
+  G.age++;
+  G.year++;
+  G.aktivitaetGenutzt = false;
+
+  // Natural aging effects
+  if (G.age > 40) G.health -= rnd(1,3);
+  if (G.age > 60) G.health -= rnd(2,5);
+  G.health = clamp(G.health, 0, 100);
+
+  // Random event
+  const event = rollEvent();
+  G.events.push({ age: G.age, text: event.text, type: event.type });
+  applyEffects(event.effects || {});
+
+  // Death check
+  if (G.health <= 0 || G.age >= (G.maxAge || 80 + rnd(0, 15))) {
+    const diedFromHealth = G.health <= 0;
+    G.dead = true;
+    G.health = 0;
+    const cause = diedFromHealth ? deathCause() : 'hohem Alter';
+    G.events.push({ age: G.age, text: `${G.name} starb an ${cause}. Möge die Seele in Frieden ruhen.`, type: 'bad' });
+    writeSave(activeSlot, G);
+    renderGame();
+    showModal(`† ${G.name}`, `Du hast dein Leben in einem Alter von <strong>${G.age} Jahren</strong> im Jahre ${G.year} beendet. ${G.name} wird in Erinnerung bleiben als ${G.stand} aus ${originLabel(G.origin)}.<br><br><em>„${eulogy()}"</em>`, [
+      { label: 'Chronik lesen', action: () => { closeModal(); openMenu('chronik'); } },
+      { label: 'Hauptmenü', action: () => { closeModal(); saveAndExit(); } }
+    ]);
+    return;
+  }
+
+  writeSave(activeSlot, G);
+  renderGame();
+
+  if (event.type === 'event' || event.type === 'bad' || event.important) {
+    showModal(`Jahr ${G.year} · Alter ${G.age}`, event.text, [
+      ...(event.choices || []),
+      { label: 'Weiter', action: closeModal }
+    ]);
+  }
+}
+
+// ── EVENT SYSTEM ─────────────────────────────────────────
+function rollEvent() {
+  const events = [
+    // POSITIVE
+    { text: 'Die Ernte war dieses Jahr reichlich. Dein Keller ist voll.', type: 'good', effects: { gold: +rnd(10,40) } },
+    { text: 'Du hast auf dem Markt ein gutes Geschäft gemacht.', type: 'good', effects: { gold: +rnd(5,25) } },
+    { text: 'Ein Wanderheiler schenkt dir einen Kräutertrank. Du fühlst dich besser.', type: 'good', effects: { health: +rnd(5,12) } },
+    { text: 'Ein Freund aus der Kindheit besucht dich. Ihr verbringt einen schönen Tag zusammen.', type: 'good', effects: { luck: +rnd(3,8) } },
+    { text: 'Du hast einen freien Nachmittag und genießt die Sonne auf dem Feld.', type: 'good', effects: { health: +3 } },
+    { text: 'Der Priester lobt dich für deine Tugend vor der Gemeinde.', type: 'good', effects: { looks: +rnd(2,6) } },
+    { text: 'Ein reicher Händler bietet dir Arbeit für eine Woche an.', type: 'good', effects: { gold: +rnd(15,35) } },
+    // NEGATIVE
+    { text: 'Du wurdest von einer Seuche heimgesucht und liegst krank darnieder.', type: 'bad', effects: { health: -rnd(8,20) } },
+    { text: 'Diebe brachen in dein Heim ein und stahlen einen Teil deines Besitzes.', type: 'bad', effects: { gold: -rnd(5,30) } },
+    { text: 'Ein strenger Winter hat die Vorräte aufgebraucht.', type: 'bad', effects: { health: -rnd(3,8), gold: -rnd(5,15) } },
+    { text: 'Du hast dich beim Holzhacken verletzt.', type: 'bad', effects: { health: -rnd(3,10) } },
+    { text: 'Ein Streit mit einem Nachbarn ließ dich schlecht schlafen.', type: 'bad', effects: { luck: -rnd(2,5) } },
+    { text: 'Die Steuern wurden erhöht. Der König braucht Geld für seinen Feldzug.', type: 'bad', effects: { gold: -rnd(10,25) } },
+    // NEUTRAL
+    { text: 'Das Jahr verging ruhig. Nichts Besonderes ist passiert.', type: '', effects: {} },
+    { text: 'Du hast einen Pilger aus fernen Landen getroffen und allerlei Geschichten gehört.', type: 'event', effects: {} },
+    { text: 'Ein Turnier in der nahegelegenen Stadt zieht Schaulustige aus der ganzen Region an.', type: 'event', effects: {} },
+    { text: 'Die Glocken der Kirche läuten für einen Hochzug im Dorf.', type: 'event', effects: {} },
+    { text: 'Der Winter war kalt, aber du hast ihn gut überstanden.', type: '', effects: {} },
+  ];
+  return events[rnd(0, events.length - 1)];
+}
+
+function applyEffects(fx) {
+  if (fx.health !== undefined) G.health = clamp(G.health + fx.health, 0, 100);
+  if (fx.luck   !== undefined) G.luck   = clamp(G.luck   + fx.luck,   0, 100);
+  if (fx.gold   !== undefined) G.gold   = Math.max(0, G.gold + fx.gold);
+  if (fx.fitness!== undefined) G.fitness= clamp(G.fitness+ fx.fitness, 0, 100);
+  if (fx.looks  !== undefined) G.looks  = clamp(G.looks  + fx.looks,   0, 100);
+}
+
+// ── MENU ACTIONS ─────────────────────────────────────────
+function openMenu(which) {
+  const menus = {
+    familie: {
+      title: '👪 Familie',
+      body: () => `
+        <strong>Vater:</strong> ${esc(G.family.vater || 'Unbekannt')}<br>
+        <strong>Mutter:</strong> ${esc(G.family.mutter || 'Unbekannt')}<br>
+        <strong>Geschwister:</strong> ${G.family.geschwister === 0 ? 'Keine' : G.family.geschwister}<br>
+        ${G.family.ehepartner ? `<strong>Ehepartner/in:</strong> ${esc(G.family.ehepartner)}<br>` : ''}
+        ${G.family.kinder ? `<strong>Kinder:</strong> ${G.family.kinder}<br>` : ''}
+        <hr style="border-color:var(--border);margin:0.75rem 0">
+        <em style="color:var(--muted);font-size:0.8rem">Weitere Aktionen folgen in einer späteren Version.</em>
+      `,
+      actions: [{ label: 'Schließen', action: closeModal }]
+    },
+    beruf: {
+      title: '⚒️ Beruf',
+      body: () => `
+        <strong>Aktueller Beruf:</strong> ${esc(G.beruf)}<br>
+        <strong>Stand:</strong> ${esc(G.stand)}<br>
+        <strong>Einkommen:</strong> ~${berufEinkommen(G.beruf)} Pfennig/Jahr<br>
+        <hr style="border-color:var(--border);margin:0.75rem 0">
+        <em style="color:var(--muted);font-size:0.8rem">Berufsauswahl & Karriere folgen in einer späteren Version.</em>
+      `,
+      actions: [{ label: 'Schließen', action: closeModal }]
+    },
+    gesundheit: {
+      title: '🌿 Gesundheit',
+      body: () => `
+        <strong>Zustand:</strong> ${healthLabel(G.health)} (${G.health}%)<br>
+        <strong>Körperkraft:</strong> ${G.fitness}%<br>
+        <strong>Alter:</strong> ${G.age} Jahre<br>
+        <hr style="border-color:var(--border);margin:0.75rem 0">
+        Einen Heiler aufsuchen kostet 15 Pfennig und stellt bis zu 20 Gesundheitspunkte wieder her.
+      `,
+      actions: [
+        { label: `Heiler aufsuchen (15 💰)`, action: () => {
+          if (G.gold < 15) { closeModal(); showModal('Heiler', 'Du hast nicht genug Gold.', [{ label: 'Ok', action: closeModal }]); return; }
+          G.gold -= 15; const gain = rnd(10,20); G.health = clamp(G.health+gain, 0, 100);
+          G.events.push({ age: G.age, text: `Du hast einen Heiler aufgesucht und fühlst dich ${gain} Punkte besser.`, type: 'good' });
+          writeSave(activeSlot, G); renderGame(); closeModal();
+        }},
+        { label: 'Schließen', action: closeModal }
+      ]
+    },
+    vermoegen: {
+      title: '🏺 Vermögen',
+      body: () => `
+        <strong>Gold:</strong> ${G.gold.toLocaleString('de-DE')} Pfennig<br>
+        <strong>Beruf:</strong> ${esc(G.beruf)}<br>
+        <strong>Steuerlast:</strong> ${G.origin === 'adel' ? 'Gering' : G.origin === 'klerus' ? 'Keine' : 'Hoch'}<br>
+        <hr style="border-color:var(--border);margin:0.75rem 0">
+        <em style="color:var(--muted);font-size:0.8rem">Investitionen & Handel folgen in einer späteren Version.</em>
+      `,
+      actions: [{ label: 'Schließen', action: closeModal }]
+    },
+    aktivitaeten: {
+      title: '🎯 Aktivitäten',
+      body: () => G.aktivitaetGenutzt
+        ? `<em style="color:var(--muted)">Du hast in diesem Jahr bereits eine Aktivität durchgeführt.<br>Schreite ein Jahr voran, um wieder zu handeln.</em>`
+        : `Wähle eine Aktivität für dieses Jahr:`,
+      actions: G.aktivitaetGenutzt ? [
+        { label: 'Schließen', action: closeModal }
+      ] : [
+        { label: G.age <= 7 ? '🧸 Spielen (+Kraft)' : '⚔️ Waffenübung (+Kraft)', action: () => {
+          G.aktivitaetGenutzt = true;
+          const gain = G.age <= 7 ? 0.5 : 1;
+          G.fitness = clamp(G.fitness+gain,0,100);
+          G.events.push({ age: G.age, text: G.age <= 7 ? 'Du spielst ausgelassen und wirst dabei ein kleines bisschen stärker.' : 'Du übst fleißig mit Schwert und Schild.', type: 'good' });
+          writeSave(activeSlot, G); renderGame();
+          showModal(
+            G.age <= 7 ? '🧸 Spielen' : '⚔️ Waffenübung',
+            G.age <= 7
+              ? `Du tobst und spielst: <span style="color:var(--blue-l)">+0,5 Kraft</span>.`
+              : `Du trainierst hart und gewinnst <span style="color:var(--blue-l)">+1 Kraft</span>.`,
+            [{ label: 'Gut!', action: closeModal }]
+          );
+        }},
+        { label: '📜 Schreiben lernen (+Bildung)', action: () => {
+          if (G.gold < 5) { showModal('Bildung', 'Du brauchst 5 Pfennig für Tinte und Pergament.', [{label:'Ok',action:closeModal}]); return; }
+          G.aktivitaetGenutzt = true;
+          G.gold -= 5; const gainB = rnd(5,10); G.bildung = clamp(G.bildung+gainB,0,100);
+          G.events.push({ age: G.age, text: 'Du verbringst Stunden damit, das Schreiben zu üben.', type: 'good' });
+          writeSave(activeSlot, G); renderGame();
+          showModal('📜 Schreiben lernen', `Du lernst eifrig: <span style="color:var(--gold)">+${gainB} Bildung</span> · <span style="color:var(--red-l)">−5 💰</span>`, [{ label: 'Gut!', action: closeModal }]);
+        }},
+        { label: '🍺 Im Wirtshaus feiern (+Glück)', action: () => {
+          G.aktivitaetGenutzt = true;
+          const cost = rnd(2,8); const gainL = rnd(5,12);
+          G.gold = Math.max(0, G.gold-cost); G.luck = clamp(G.luck+gainL,0,100);
+          G.events.push({ age: G.age, text: 'Du feierst im Wirtshaus und triffst viele interessante Leute.', type: 'good' });
+          writeSave(activeSlot, G); renderGame();
+          showModal('🍺 Wirtshaus', `Ein fröhlicher Abend! <span style="color:var(--gold)">+${gainL} Glück</span> · <span style="color:var(--red-l)">−${cost} 💰</span>`, [{ label: 'Prost!', action: closeModal }]);
+        }},
+        { label: 'Schließen', action: closeModal }
+      ]
+    },
+    beziehungen: {
+      title: '🤝 Beziehungen',
+      body: () => `
+        <strong>Bekannte:</strong> ${G.beziehungen.length || 'Niemand besonderes'}<br>
+        <hr style="border-color:var(--border);margin:0.75rem 0">
+        <em style="color:var(--muted);font-size:0.8rem">Freundschaften, Feindschaften & Heirat folgen in einer späteren Version.</em>
+      `,
+      actions: [{ label: 'Schließen', action: closeModal }]
+    },
+    bildung: {
+      title: '📜 Bildung',
+      body: () => `
+        <strong>Bildungsstand:</strong> ${bildungLabel(G.bildung)} (${G.bildung}%)<br>
+        <strong>Herkunft:</strong> ${originLabel(G.origin)}<br>
+        <hr style="border-color:var(--border);margin:0.75rem 0">
+        <em style="color:var(--muted);font-size:0.8rem">Schriftkundigkeit eröffnet neue Berufe und Optionen.</em>
+      `,
+      actions: [{ label: 'Schließen', action: closeModal }]
+    },
+    chronik: {
+      title: '📖 Chronik',
+      body: () => {
+        const entries = G.events.map(e => `<div style="margin-bottom:6px"><span style="color:var(--muted);font-size:0.75rem">Alter ${e.age}:</span> ${esc(e.text)}</div>`).join('');
+        return `<div style="max-height:50vh;overflow-y:auto;font-size:0.82rem">${entries}</div>`;
+      },
+      actions: [{ label: 'Schließen', action: closeModal }]
+    }
+  };
+
+  const m = menus[which];
+  if (!m) return;
+  showModal(m.title, m.body(), m.actions);
+}
+
+// ── MODAL ─────────────────────────────────────────────────
+function showModal(title, body, actions = []) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = body;
+  const act = document.getElementById('modal-actions');
+  act.innerHTML = '';
+  actions.forEach(a => {
+    const btn = document.createElement('button');
+    btn.className = 'btn mt-1' + (a.danger ? ' btn-danger' : '');
+    btn.textContent = a.label;
+    btn.onclick = a.action;
+    act.appendChild(btn);
+  });
+  document.getElementById('modal-overlay').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('active');
+}
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── HELPERS ───────────────────────────────────────────────
+function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function genderIcon(g) { return g === 'f' ? '👩' : '👨'; }
+function originIcon(o) { return { bauer:'🌾', adel:'⚜️', kaufmann:'💰', klerus:'✝️' }[o] || ''; }
+function originLabel(o) { return { bauer:'Bauer', adel:'Adel', kaufmann:'Kaufmann', klerus:'Klerus' }[o] || o; }
+function selectedOriginLabel() { return originLabel(selectedOrigin); }
+
+function healthLabel(h) {
+  if (h > 85) return 'Blühend';
+  if (h > 65) return 'Gesund';
+  if (h > 40) return 'Angeschlagen';
+  if (h > 20) return 'Krank';
+  return 'Sterbend';
+}
+function bildungLabel(b) {
+  if (b < 10) return 'Analphabet';
+  if (b < 30) return 'Grundkenntnisse';
+  if (b < 60) return 'Schreibkundig';
+  if (b < 80) return 'Gelehrt';
+  return 'Weiser';
+}
+function berufEinkommen(beruf) {
+  const map = { 'Feldarbeit':8, 'Warenhandel':25, 'Gebet':5, 'Müßiggang':0 };
+  return map[beruf] || 10;
+}
+function deathCause() {
+  const causes = ['einer Seuche','einer Kriegswunde','einem Fieber','Erschöpfung','einem Unfall','einem langen Leiden'];
+  return causes[rnd(0,causes.length-1)];
+}
+function eulogy() {
+  const e = ['Er pflegte stets zu sagen: Die Arbeit adelt den Mann.', 'Sie hinterließ eine Spur der Güte.', 'Ein Leben gelebt wie es Gott gefiel.', 'Wenig Reichtum, aber viel Würde.'];
+  return e[rnd(0,e.length-1)];
+}
+
+const MALE_NAMES   = ['Heinrich','Wilhelm','Konrad','Friedrich','Otto','Berthold','Gottfried','Walther','Gerhard','Ekkehard'];
+const FEMALE_NAMES = ['Hildegard','Agnes','Mechthild','Adelheid','Kunigunde','Mathilde','Elisabeth','Gisela','Hedwig','Bertha'];
+function randomName(gender) {
+  const pool = gender === 'f' ? FEMALE_NAMES : MALE_NAMES;
+  return pool[rnd(0, pool.length-1)];
+}
+</script>
+</body>
+</html>
