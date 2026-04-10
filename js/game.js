@@ -1,27 +1,4 @@
-﻿// ── SAVE MANAGEMENT ──────────────────────────────────────
-const SAVE_KEY = 'mittelalter_leben_saves';
-const MAX_SLOTS = 10;
-
-function loadAllSaves() {
-  try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }
-  catch(e) { return {}; }
-}
-function saveAllSaves(data) {
-  localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-}
-function getSave(slot) { return loadAllSaves()[slot] || null; }
-function writeSave(slot, data) {
-  const all = loadAllSaves();
-  all[slot] = data;
-  saveAllSaves(all);
-}
-function deleteSave(slot) {
-  const all = loadAllSaves();
-  delete all[slot];
-  saveAllSaves(all);
-}
-
-// ── GAME STATE ───────────────────────────────────────────
+﻿// ── GAME STATE ───────────────────────────────────────────
 let G = null; // active game state
 let activeSlot = null;
 let pendingStartFitness = rnd(1, 20);
@@ -62,6 +39,9 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     beruf: 'Keine Lehre',
     lehre: null,
     lehreJahr: null,
+    meister: false,
+    betrieb: false,
+    mitarbeiter: 0,
     beziehungen: [],
     maxAge: 80 + rnd(0, 15),
     aktivitaetGenutzt: false,
@@ -71,309 +51,36 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
   };
 }
 
-function migrateLegacySave(save) {
-  if (!save || typeof save !== 'object') return save;
-
-  if (save.origin === 'adel') save.origin = 'bauer';
-  if (save.stand === 'Junker' || save.stand === 'Patrizier') save.stand = 'Kind';
-  if (save.beruf === 'Müßiggang' || save.beruf === 'Gebet' || save.beruf === 'Feldarbeit' || save.beruf === 'Warenhandel') {
-    save.beruf = 'Keine Lehre';
-  }
-
-  if (!('lehre' in save)) save.lehre = null;
-  if (!('lehreJahr' in save)) save.lehreJahr = null;
-  if (save.lehre && typeof save.lehreJahr !== 'number') save.lehreJahr = save.year;
-  if (!('schuleGenutzt' in save)) save.schuleGenutzt = false;
-  if (!('aktivitaetGenutzt' in save)) save.aktivitaetGenutzt = false;
-  if (!('arbeitGenutzt' in save)) save.arbeitGenutzt = false;
-  if (!('heilerGenutzt' in save)) save.heilerGenutzt = false;
-  if (typeof save.maxAge !== 'number') save.maxAge = 80 + rnd(0, 15);
-  if (!save.stand) save.stand = save.lehre ? standFromLehre(save.lehre) : 'Kind';
-  if (!save.beruf) save.beruf = save.lehre ? berufFromLehre(save.lehre) : 'Keine Lehre';
-
-  return save;
-}
-
-// ── SCREEN NAV ───────────────────────────────────────────
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0, 0);
-}
-
-function showSlots() {
-  renderSlots();
-  showScreen('screen-slots');
-}
-
-function renderSlots() {
-  const all = loadAllSaves();
-  const list = document.getElementById('slots-list');
-  let changed = false;
-  list.innerHTML = '';
-
-  // Bestehende Spielstände anzeigen
-  for (let i = 1; i <= MAX_SLOTS; i++) {
-    const save = all[i] || null;
-    if (!save) continue;
-    const normalizedSave = migrateLegacySave(save);
-    all[i] = normalizedSave;
-    changed = true;
-    const div = document.createElement('div');
-    div.className = 'save-slot';
-    const icon = genderIcon(normalizedSave.gender) + (normalizedSave.lehre ? lehreIcon(normalizedSave.lehre) : '');
-    div.innerHTML = `
-      <div class="slot-icon">${icon}</div>
-      <div class="slot-info">
-        <div class="slot-name">${esc(normalizedSave.name)}</div>
-        <div class="slot-meta">${normalizedSave.age} Jahre · ${normalizedSave.year} n. Chr. · ${esc(normalizedSave.stand)}</div>
-      </div>
-      <div class="slot-actions">
-        <button class="btn btn-sm" onclick="loadGame(${i});event.stopPropagation()">Laden</button>
-        <button class="btn btn-sm btn-danger" onclick="confirmDelete(${i});event.stopPropagation()">✕</button>
-      </div>`;
-    div.onclick = () => loadGame(i);
-    list.appendChild(div);
-  }
-
-  if (changed) saveAllSaves(all);
-
-  // Freien Slot für neues Leben suchen
-  const usedSlots = Object.keys(all).map(Number);
-  const nextFreeSlot = Array.from({ length: MAX_SLOTS }, (_, i) => i + 1).find(i => !usedSlots.includes(i));
-
-  // Schaltfläche "Neues Leben" nur wenn noch ein freier Slot vorhanden
-  if (nextFreeSlot !== undefined) {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-gold mt-2';
-    btn.style.display = 'block';
-    btn.textContent = '✦ Neues Leben beginnen';
-    btn.onclick = () => openCreateScreen(nextFreeSlot);
-    list.appendChild(btn);
-  } else {
-    const p = document.createElement('p');
-    p.className = 'text-muted text-center mt-2';
-    p.style.fontSize = '0.8rem';
-    p.textContent = 'Alle Spielstandsplätze sind belegt. Lösche einen Spielstand, um ein neues Leben zu beginnen.';
-    list.appendChild(p);
-  }
-}
-
-function openCreateScreen(slot) {
-  activeSlot = slot;
-  pendingStartFitness = rnd(1, 20);
-  document.getElementById('create-name').value = '';
-  updateCharPreview();
-  showScreen('screen-create');
-}
-
-function updateCharPreview() {
-  const name = document.getElementById('create-name').value || '???';
-  const gender = document.getElementById('create-gender').value;
-  const s = defaultStats('bauer');
-  const prev = document.getElementById('char-preview');
-  prev.innerHTML = `
-    <div class="char-header" style="margin-bottom:0">
-      <div class="char-avatar">${genderIcon(gender)}</div>
-      <div class="char-info">
-        <div class="char-name">${esc(name)}</div>
-        <div class="char-desc">Kind · Startkraft ${statDisplayValue(pendingStartFitness)}</div>
-      </div>
-      <div class="char-year" style="color:var(--gold)">${s.gold} 💰</div>
-    </div>`;
-}
-
-document.getElementById('create-name').addEventListener('input', updateCharPreview);
-document.getElementById('create-gender').addEventListener('change', updateCharPreview);
-
-function startNewGame() {
-  const name = document.getElementById('create-name').value.trim();
-  if (!name) { alert('Bitte gib deinem Charakter einen Namen.'); return; }
-  const gender = document.getElementById('create-gender').value;
-  const year = document.getElementById('create-year').value;
-  G = newGame(activeSlot, name, gender, 'bauer', year, pendingStartFitness);
-  addEventEntry(`${name} wurde geboren — eine neue Seele betritt die Welt.`, 'event');
-  writeSave(activeSlot, G);
-  renderGame();
-  showScreen('screen-game');
-}
-
-function loadGame(slot) {
-  const save = getSave(slot);
-  if (!save) return;
-  G = migrateLegacySave(save);
-  activeSlot = slot;
-  writeSave(activeSlot, G);
-  renderGame();
-  showScreen('screen-game');
-}
-
-function saveAndExit() {
-  if (G) writeSave(activeSlot, G);
-  showSlots();
-}
-
-function confirmDelete(slot) {
-  const save = getSave(slot);
-  if (!save) return;
-  showModal(`Spielstand löschen?`, `Bist du sicher, dass du das Leben von <strong>${esc(save.name)}</strong> unwiderruflich beenden möchtest?`, [
-    { label: 'Löschen', danger: true, action: () => { deleteSave(slot); closeModal(); renderSlots(); } },
-    { label: 'Abbrechen', action: closeModal }
-  ]);
-}
-
-// ── GAME RENDER ──────────────────────────────────────────
-function renderGame() {
-  if (!G) return;
-  const icon = genderIcon(G.gender) + (G.lehre ? lehreIcon(G.lehre) : '');
-  document.getElementById('game-avatar').textContent = icon;
-  document.getElementById('game-name').textContent = G.name;
-  document.getElementById('game-desc').textContent = G.stand;
-  document.getElementById('game-age-display').textContent = `${G.age} Jahre`;
-  document.getElementById('game-year-display').textContent = `${G.year} n. Chr.`;
-  document.getElementById('game-gold').textContent = G.gold.toLocaleString('de-DE');
-  document.getElementById('game-stand').textContent = G.stand;
-  setBar('bar-health', G.health);
-  setBar('bar-luck',   G.luck);
-  setBar('bar-fitness',G.fitness);
-  setBar('bar-looks',  G.looks);
-  document.getElementById('value-health').textContent = statDisplayValue(G.health);
-  document.getElementById('value-luck').textContent = statDisplayValue(G.luck);
-  document.getElementById('value-fitness').textContent = statDisplayValue(G.fitness);
-  document.getElementById('value-looks').textContent = statDisplayValue(G.looks);
-  document.getElementById('info-familie').textContent   = G.family.vater ? `Vater, Mutter, ${G.family.geschwister === 0 ? 'keine' : G.family.geschwister} Geschwister` : '—';
-  document.getElementById('info-beruf').textContent     = G.beruf || '—';
-  document.getElementById('info-gesundheit').textContent= healthLabel(G.health);
-  document.getElementById('info-vermoegen').textContent = G.gold + ' Pfennig';
-  document.getElementById('info-bez').textContent       = G.beziehungen.length + ' Personen';
-  document.getElementById('info-bildung').textContent   = canGoToSchool() ? 'Schule möglich' : bildungLabel(G.bildung);
-  document.getElementById('btn-age-up').disabled        = G.dead;
-  document.getElementById('btn-age-up').textContent = G.dead ? '† Gestorben' : '⏳ Jahr voranschreiten';
-  renderSchoolNotice();
-  renderLog();
-}
-
-function renderSchoolNotice() {
-  const notice = document.getElementById('school-notice');
-  if (!notice || !G) return;
-
-  if (canGoToSchool()) {
-    notice.style.display = 'block';
-    notice.textContent = 'Schulbesuch ist in diesem Jahr möglich. Du findest ihn im Bereich Bildung.';
-    return;
-  }
-
-  notice.style.display = 'none';
-  notice.textContent = '';
-}
-
-function setBar(id, val) {
-  document.getElementById(id).style.width = Math.max(0, Math.min(100, val)) + '%';
-}
-
-function statDisplayValue(v) {
-  const rounded = Math.round(v * 10) / 10;
-  return `${rounded.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/100`;
-}
-
-function renderLog() {
-  const log = document.getElementById('event-log');
-  log.innerHTML = '';
-  const recent = [...G.events].reverse().slice(0, 15);
-  recent.forEach(e => {
-    const div = document.createElement('div');
-    div.className = 'log-entry ' + (e.type || '');
-    div.innerHTML = `<span class="log-age">Alter ${e.age}:</span>${esc(e.text)}`;
-    const tip = chronikTooltip(e.changes || {});
-    if (tip) {
-      div.setAttribute('data-tip', tip);
-      div.title = tip;
-    }
-    log.appendChild(div);
-  });
-}
-
-function openChronikScreen() {
-  if (!G) return;
-  renderChronik();
-  showScreen('screen-chronik');
-}
-
-function formatDelta(n) {
-  const sign = n > 0 ? '+' : '';
-  return `${sign}${n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`;
-}
-
-function chronikTooltip(changes = {}) {
-  const labels = {
-    gold: 'Gold',
-    health: 'Gesundheit',
-    fitness: 'Kraft',
-    luck: 'Zufriedenheit',
-    looks: 'Ansehen',
-    bildung: 'Bildung',
-  };
-  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
-  const parts = keys
-    .filter(key => typeof changes[key] === 'number' && changes[key] !== 0)
-    .map(key => `${labels[key]}: ${formatDelta(changes[key])}`);
-  return parts.join(' | ');
-}
-
-function renderChronikEffects(changes = {}) {
-  const labels = {
-    gold: 'Gold',
-    health: 'Gesundheit',
-    fitness: 'Kraft',
-    luck: 'Zufriedenheit',
-    looks: 'Ansehen',
-    bildung: 'Bildung',
-  };
-  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
-  const chips = [];
-  keys.forEach(k => {
-    const val = changes[k] || 0;
-    if (val === 0) return;
-    chips.push({ val, html: `<span class="chronik-chip ${val > 0 ? 'good' : 'bad'}">${labels[k]} ${formatDelta(val)}</span>` });
-  });
-  chips.sort((a, b) => b.val - a.val);
-  return chips.length ? chips.map(c => c.html).join('') : '<span class="chronik-chip none">Keine direkten Werteänderungen</span>';
-}
-
-function renderChronik() {
-  const list = document.getElementById('chronik-list');
-  if (!G || !list) return;
-  if (!G.events.length) {
-    list.innerHTML = '<p class="text-muted">Noch keine Ereignisse.</p>';
-    return;
-  }
-  const entries = [...G.events].reverse();
-  list.innerHTML = entries.map(e => {
-    return `
-      <div class="chronik-entry ${e.type || ''}">
-        <div class="chronik-meta">Alter ${e.age}</div>
-        <div class="chronik-text">${esc(e.text)}</div>
-        <div class="chronik-effects">${renderChronikEffects(e.changes || {})}</div>
-      </div>`;
-  }).join('');
-}
+// UI/navigation/render logic was moved to js/ui.js.
 
 // ── AGE UP ───────────────────────────────────────────────
 function ageUp() {
   if (!G || G.dead) return;
   if (typeof G.maxAge !== 'number') G.maxAge = 80 + rnd(0, 15);
+  const warLehrling = isLehrling();
   G.age++;
   G.year++;
+  const lehreAbgeschlossenDiesesJahr = warLehrling && !isLehrling();
   G.aktivitaetGenutzt = false;
   G.arbeitGenutzt = false;
   G.schuleGenutzt = false;
   G.heilerGenutzt = false;
+
+  if (G.betrieb && G.mitarbeiter > 0) {
+    const betriebErtrag = G.mitarbeiter * 150;
+    G.gold += betriebErtrag;
+    addEventEntry('Dein Betrieb erwirtschaftet Gewinn.', 'good', { gold: betriebErtrag });
+  }
 
   if (G.age >= 12 && !G.lehre) {
     showLehreAuswahl();
     writeSave(activeSlot, G);
     renderGame();
     return;
+  }
+
+  if (lehreAbgeschlossenDiesesJahr) {
+    addEventEntry('Du hast deine Lehre abgeschlossen und bist nun Geselle.', 'event', {});
   }
 
   // Natural aging effects
@@ -406,6 +113,13 @@ function ageUp() {
 
   writeSave(activeSlot, G);
   renderGame();
+
+  if (lehreAbgeschlossenDiesesJahr) {
+    showModal('⚒️ Lehre abgeschlossen', 'Du hast deine Lehre abgeschlossen und bist nun Geselle.', [
+      { label: 'Weiter', action: closeModal }
+    ]);
+    return;
+  }
 
   if (event.type === 'event' || event.type === 'bad' || event.important) {
     showModal(`Jahr ${G.year} · Alter ${G.age}`, esc(event.text), [
@@ -539,6 +253,78 @@ function arbeiteImBeruf() {
   showModal('⚒️ Arbeit', modalText, [{ label: 'Weiter', action: closeModal }]);
 }
 
+function isGeselle() {
+  return !!G && !!G.lehre && !isLehrling();
+}
+
+function kaufeMeistertitel() {
+  if (!G || !isGeselle()) {
+    showModal('🏛️ Rathaus', 'Für die Meisterprüfung musst du zuerst deine Lehre abgeschlossen haben.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (G.meister) {
+    showModal('🏛️ Rathaus', 'Du trägst den Meistertitel bereits.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (G.gold < 1000) {
+    showModal('🏛️ Rathaus', 'Du brauchst 1000 Pfennig für die Meisterprüfung.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  G.gold -= 1000;
+  G.meister = true;
+  G.stand = 'Meisterstand';
+  addEventEntry('Du hast die Meisterprüfung im Rathaus abgelegt und darfst nun einen eigenen Betrieb führen.', 'good', { gold: -1000 });
+  writeSave(activeSlot, G);
+  renderGame();
+  showModal('🏛️ Meistertitel', 'Du hast die Meisterprüfung bestanden und darfst nun einen eigenen Betrieb führen.', [{ label: 'Weiter', action: closeModal }]);
+}
+
+function erwerbeBetrieb() {
+  if (!G || !G.meister) {
+    showModal('⚒️ Betriebe', 'Du brauchst zuerst den Meistertitel aus dem Rathaus.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (G.betrieb) {
+    showModal('⚒️ Betriebe', 'Du besitzt bereits einen Betrieb.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (G.gold < 800) {
+    showModal('⚒️ Betriebe', 'Du brauchst 800 Pfennig, um einen Betrieb zu erwerben.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  G.gold -= 800;
+  G.betrieb = true;
+  G.mitarbeiter = 1;
+  addEventEntry('Du hast einen eigenen Betrieb erworben. Ein erster Arbeiter unterstützt dich.', 'good', { gold: -800 });
+  writeSave(activeSlot, G);
+  renderGame();
+  showModal('⚒️ Betriebe', 'Betrieb erworben. Du startest mit 1 Arbeiter.', [{ label: 'Weiter', action: closeModal }]);
+}
+
+function stelleMitarbeiterEin() {
+  if (!G || !G.betrieb) {
+    showModal('⚒️ Betriebe', 'Du brauchst zuerst einen eigenen Betrieb.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (G.mitarbeiter >= 2) {
+    showModal('⚒️ Betriebe', 'Du hast bereits die maximale Anzahl von 2 Mitarbeitern.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (G.gold < 300) {
+    showModal('⚒️ Betriebe', 'Du brauchst 300 Pfennig für einen weiteren Mitarbeiter.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  G.gold -= 300;
+  G.mitarbeiter += 1;
+  addEventEntry('Du stellst einen weiteren Arbeiter für deinen Betrieb ein.', 'good', { gold: -300 });
+  writeSave(activeSlot, G);
+  renderGame();
+  showModal('⚒️ Betriebe', `Neuer Mitarbeiter eingestellt. Aktuell: ${G.mitarbeiter}/2.`, [{ label: 'Weiter', action: closeModal }]);
+}
+
 function applyEffects(fx) {
   if (fx.health !== undefined) G.health = clamp(G.health + fx.health, 0, 100);
   if (fx.luck   !== undefined) G.luck   = clamp(G.luck   + fx.luck,   0, 100);
@@ -546,195 +332,6 @@ function applyEffects(fx) {
   if (fx.fitness!== undefined) G.fitness= clamp(G.fitness+ fx.fitness, 0, 100);
   if (fx.looks  !== undefined) G.looks  = clamp(G.looks  + fx.looks,   0, 100);
 }
-
-// ── MENU ACTIONS ─────────────────────────────────────────
-function openMenu(which) {
-  if (which === 'chronik') {
-    openChronikScreen();
-    return;
-  }
-  const menus = {
-    familie: {
-      title: '👪 Familie',
-      body: () => `
-        <strong>Vater:</strong> ${esc(G.family.vater || 'Unbekannt')}<br>
-        <strong>Mutter:</strong> ${esc(G.family.mutter || 'Unbekannt')}<br>
-        <strong>Geschwister:</strong> ${G.family.geschwister === 0 ? 'Keine' : G.family.geschwister}<br>
-        ${G.family.ehepartner ? `<strong>Ehepartner/in:</strong> ${esc(G.family.ehepartner)}<br>` : ''}
-        ${G.family.kinder ? `<strong>Kinder:</strong> ${G.family.kinder}<br>` : ''}
-        <hr style="border-color:var(--border);margin:0.75rem 0">
-        <em style="color:var(--muted);font-size:0.8rem">Weitere Aktionen folgen in einer späteren Version.</em>
-      `,
-      actions: [{ label: 'Schließen', action: closeModal }]
-    },
-    beruf: {
-      title: '⚒️ Beruf',
-      body: () => `
-        <strong>Aktueller Beruf:</strong> ${esc(G.beruf || 'Keine Lehre')}<br>
-        <strong>Lehre:</strong> ${lehreStatusText()}<br>
-        <strong>Stand:</strong> ${esc(G.stand)}<br>
-        <strong>Arbeit in diesem Jahr:</strong> ${G.lehre ? (G.arbeitGenutzt ? 'Bereits erledigt' : 'Noch offen') : 'Nicht verfügbar'}<br>
-        <hr style="border-color:var(--border);margin:0.75rem 0">
-        
-      `,
-      actions: [
-        ...(G.lehre ? [{
-          label: G.arbeitGenutzt ? 'Arbeiten (bereits genutzt)' : 'Arbeiten',
-          action: () => arbeiteImBeruf()
-        }] : []),
-        { label: 'Schließen', action: closeModal }
-      ]
-    },
-    gesundheit: {
-      title: '🌿 Gesundheit',
-      body: () => `
-        <strong>Zustand:</strong> ${healthLabel(G.health)} (${G.health}%)<br>
-        <strong>Körperkraft:</strong> ${G.fitness}%<br>
-        <strong>Alter:</strong> ${G.age} Jahre<br>
-        <hr style="border-color:var(--border);margin:0.75rem 0">
-        ${G.heilerGenutzt
-          ? `<em style="color:var(--muted)">Du hast in diesem Jahr bereits einen Heiler aufgesucht.<br>Schreite ein Jahr voran, um ihn erneut besuchen zu können.</em>`
-          : isKind()
-            ? `Als Kind ist der Besuch beim Heiler kostenlos und stellt bis zu 20 Gesundheitspunkte wieder her.`
-            : `Einen Heiler aufsuchen kostet 15 Pfennig und stellt bis zu 20 Gesundheitspunkte wieder her.`}
-      `,
-      actions: G.heilerGenutzt ? [
-        { label: 'Schließen', action: closeModal }
-      ] : [
-        { label: isKind() ? 'Heiler aufsuchen (kostenlos)' : 'Heiler aufsuchen (15 💰)', action: () => {
-          const healerCost = isKind() ? 0 : 15;
-          if (G.gold < healerCost) { closeModal(); showModal('Heiler', 'Du hast nicht genug Gold.', [{ label: 'Ok', action: closeModal }]); return; }
-          G.heilerGenutzt = true;
-          G.gold -= healerCost;
-          const gain = rnd(10,20);
-          G.health = clamp(G.health+gain, 0, 100);
-          const changes = healerCost > 0 ? { gold: -healerCost, health: gain } : { health: gain };
-          addEventEntry(`Du hast einen Heiler aufgesucht und fühlst dich ${gain} Punkte besser.`, 'good', changes);
-          writeSave(activeSlot, G); renderGame(); closeModal();
-        }},
-        { label: 'Schließen', action: closeModal }
-      ]
-    },
-    vermoegen: {
-      title: '🏺 Vermögen',
-      body: () => `
-        <strong>Gold:</strong> ${G.gold.toLocaleString('de-DE')} Pfennig<br>
-        <strong>Beruf:</strong> ${esc(G.beruf)}<br>
-        <strong>Steuerlast:</strong> ${G.origin === 'klerus' ? 'Keine' : 'Hoch'}<br>
-        <hr style="border-color:var(--border);margin:0.75rem 0">
-        <em style="color:var(--muted);font-size:0.8rem">Investitionen & Handel folgen in einer späteren Version.</em>
-      `,
-      actions: [{ label: 'Schließen', action: closeModal }]
-    },
-    aktivitaeten: {
-      title: '🎯 Aktivitäten',
-      body: () => G.aktivitaetGenutzt
-        ? `<em style="color:var(--muted)">Du hast in diesem Jahr bereits eine Aktivität durchgeführt.<br>Schreite ein Jahr voran, um wieder zu handeln.</em>`
-        : `Wähle eine Aktivität für dieses Jahr:${!canPracticeWriting() ? '<br><span style="color:var(--muted)">Schreiben lernen wird ab 4 Jahren verfügbar.</span>' : ''}`,
-      actions: G.aktivitaetGenutzt ? [
-        { label: 'Schließen', action: closeModal }
-      ] : [
-        { label: G.age <= 7 ? '🧸 Spielen (+Kraft, +Zufriedenheit)' : '⚔️ Waffenübung (+Kraft)', action: () => {
-          G.aktivitaetGenutzt = true;
-          const gain = G.age <= 7 ? 2 : 3;
-          G.fitness = clamp(G.fitness+gain,0,100);
-          if (G.age <= 7) {
-            const gainL = rnd(5,20);
-            G.luck = clamp(G.luck+gainL,0,100);
-            addEventEntry('Du spielst ausgelassen und wirst dabei ein kleines bisschen stärker.', 'good', { fitness: gain, luck: gainL });
-            writeSave(activeSlot, G); renderGame();
-            showModal('🧸 Spielen', `Du tobst und spielst: <span style="color:var(--blue-l)">+${gain} Kraft</span> · <span style="color:var(--gold)">+${gainL} Zufriedenheit</span>.`, [{ label: 'Gut!', action: closeModal }]);
-          } else {
-            addEventEntry('Du übst fleißig mit Schwert und Schild.', 'good', { fitness: gain });
-            writeSave(activeSlot, G); renderGame();
-            showModal('⚔️ Waffenübung', `Du trainierst hart und gewinnst <span style="color:var(--blue-l)">+${gain} Kraft</span>.`, [{ label: 'Gut!', action: closeModal }]);
-          }
-        }},
-        ...(canPracticeWriting() ? [{ label: '📜 Schreiben lernen (+Bildung)', action: () => {
-          const schreibenKosten = isKind() ? 0 : 5;
-          if (G.gold < schreibenKosten) { showModal('Bildung', 'Du brauchst 5 Pfennig für Tinte und Pergament.', [{label:'Ok',action:closeModal}]); return; }
-          G.aktivitaetGenutzt = true;
-          G.gold -= schreibenKosten;
-          const gainB = rnd(3,5);
-          G.bildung = clamp(G.bildung+gainB,0,100);
-          const changes = schreibenKosten > 0 ? { gold: -schreibenKosten, bildung: gainB } : { bildung: gainB };
-          addEventEntry('Du verbringst Stunden damit, das Schreiben zu üben.', 'good', changes);
-          writeSave(activeSlot, G); renderGame();
-          const kostenText = schreibenKosten > 0
-            ? ` · <span style="color:var(--red-l)">−${schreibenKosten} 💰</span>`
-            : ' · <span style="color:var(--green-l)">kostenlos (Kind)</span>';
-          showModal('📜 Schreiben lernen', `Du lernst eifrig: <span style="color:var(--gold)">+${gainB} Bildung</span>${kostenText}`, [{ label: 'Gut!', action: closeModal }]);
-        }}] : []),
-        ...(!isKind() ? [{ label: '🍺 Im Wirtshaus feiern (+Zufriedenheit)', action: () => {
-          G.aktivitaetGenutzt = true;
-          const cost = rnd(2,8);
-          const gainL = rnd(5,12);
-          G.gold = Math.max(0, G.gold-cost); G.luck = clamp(G.luck+gainL,0,100);
-          addEventEntry('Du feierst im Wirtshaus und triffst viele interessante Leute.', 'good', { gold: -cost, luck: gainL });
-          writeSave(activeSlot, G); renderGame();
-          showModal('🍺 Wirtshaus', `Ein fröhlicher Abend! <span style="color:var(--gold)">+${gainL} Zufriedenheit</span> · <span style="color:var(--red-l)">−${cost} 💰</span>`, [{ label: 'Prost!', action: closeModal }]);
-        }}] : []),
-        { label: 'Schließen', action: closeModal }
-      ]
-    },
-    beziehungen: {
-      title: '🤝 Beziehungen',
-      body: () => `
-        <strong>Bekannte:</strong> ${G.beziehungen.length || 'Niemand besonderes'}<br>
-        <hr style="border-color:var(--border);margin:0.75rem 0">
-        <em style="color:var(--muted);font-size:0.8rem">Freundschaften, Feindschaften & Heirat folgen in einer späteren Version.</em>
-      `,
-      actions: [{ label: 'Schließen', action: closeModal }]
-    },
-    bildung: {
-      title: '📜 Bildung',
-      body: () => `
-        <strong>Bildungsstand:</strong> ${bildungLabel(G.bildung)} (${G.bildung}%)<br>
-        <strong>Schule:</strong> ${schoolStatusLabel()}<br>
-        <hr style="border-color:var(--border);margin:0.75rem 0">
-        <em style="color:var(--muted);font-size:0.8rem">Schriftkundigkeit eröffnet neue Berufe und Optionen.</em>
-      `,
-      actions: [
-        ...(canGoToSchool() ? [{ label: '🏫 Zur Schule gehen (+Bildung)', action: besucheSchule }] : []),
-        { label: 'Schließen', action: closeModal }
-      ]
-    },
-    chronik: {
-      title: '📖 Chronik',
-      body: () => {
-        const entries = G.events.map(e => `<div style="margin-bottom:6px"><span style="color:var(--muted);font-size:0.75rem">Alter ${e.age}:</span> ${esc(e.text)}</div>`).join('');
-        return `<div style="max-height:50vh;overflow-y:auto;font-size:0.82rem">${entries}</div>`;
-      },
-      actions: [{ label: 'Schließen', action: closeModal }]
-    }
-  };
-
-  const m = menus[which];
-  if (!m) return;
-  showModal(m.title, m.body(), m.actions);
-}
-
-// ── MODAL ─────────────────────────────────────────────────
-function showModal(title, body, actions = []) {
-  document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-body').innerHTML = body;
-  const act = document.getElementById('modal-actions');
-  act.innerHTML = '';
-  actions.forEach(a => {
-    const btn = document.createElement('button');
-    btn.className = 'btn mt-1' + (a.danger ? ' btn-danger' : '');
-    btn.textContent = a.label;
-    btn.onclick = a.action;
-    act.appendChild(btn);
-  });
-  document.getElementById('modal-overlay').classList.add('active');
-}
-function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('active');
-}
-document.getElementById('modal-overlay').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
-});
 
 // ── HELPERS ───────────────────────────────────────────────
 function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
