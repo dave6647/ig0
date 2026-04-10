@@ -416,8 +416,8 @@
 <div id="screen-game" class="screen" style="padding:0;align-items:stretch">
   <div class="topbar">
     <button class="topbar-back" onclick="saveAndExit()">← Speichern</button>
-    <span class="topbar-title" id="game-topbar-title">Leben</span>
-    <span style="font-size:0.75rem;color:var(--muted)" id="game-year-display"></span>
+    <span class="topbar-title" id="game-year-display">Jahr</span>
+    <span style="width:28px"></span>
   </div>
 
   <div style="flex:1;overflow-y:auto;padding:0.8rem 1rem 2rem;width:100%;max-width:480px;margin:0 auto">
@@ -439,7 +439,7 @@
         <div class="stat-bar"><div class="stat-bar-fill" id="bar-health"></div></div>
       </div>
       <div class="stat-item bar-luck">
-        <label>Glück <span class="stat-value" id="value-luck">0/100</span></label>
+        <label>Zufriedenheit <span class="stat-value" id="value-luck">0/100</span></label>
         <div class="stat-bar"><div class="stat-bar-fill" id="bar-luck"></div></div>
       </div>
       <div class="stat-item bar-fitness">
@@ -625,7 +625,7 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
   return {
     slot, name, gender, origin, year: parseInt(startYear),
     age: 0, dead: false,
-    health: s.health, luck: s.luck, fitness: clamp(startFitness ?? rnd(1, 20), 1, 20), looks: s.looks,
+    health: s.health, luck: 60, fitness: clamp(startFitness ?? rnd(1, 20), 1, 20), looks: s.looks,
     gold: s.gold, stand: s.stand,
     bildung: 0, ansehen: 0,
     events: [],
@@ -654,33 +654,46 @@ function renderSlots() {
   const all = loadAllSaves();
   const list = document.getElementById('slots-list');
   list.innerHTML = '';
+
+  // Bestehende Spielstände anzeigen
   for (let i = 1; i <= MAX_SLOTS; i++) {
     const save = all[i] || null;
+    if (!save) continue;
     const div = document.createElement('div');
-    div.className = 'save-slot' + (save ? '' : ' slot-empty');
-    if (save) {
-      const icon = genderIcon(save.gender) + originIcon(save.origin);
-      div.innerHTML = `
-        <div class="slot-icon">${icon}</div>
-        <div class="slot-info">
-          <div class="slot-name">${esc(save.name)}</div>
-          <div class="slot-meta">${save.age} Jahre · ${save.year} n. Chr. · ${esc(save.stand)}</div>
-        </div>
-        <div class="slot-actions">
-          <button class="btn btn-sm" onclick="loadGame(${i});event.stopPropagation()">Laden</button>
-          <button class="btn btn-sm btn-danger" onclick="confirmDelete(${i});event.stopPropagation()">✕</button>
-        </div>`;
-      div.onclick = () => loadGame(i);
-    } else {
-      div.innerHTML = `
-        <div class="slot-icon">＋</div>
-        <div class="slot-info">
-          <div class="slot-name">Leerer Spielstand ${i}</div>
-          <div class="slot-meta">Neues Leben beginnen</div>
-        </div>`;
-      div.onclick = () => openCreateScreen(i);
-    }
+    div.className = 'save-slot';
+    const icon = genderIcon(save.gender) + originIcon(save.origin);
+    div.innerHTML = `
+      <div class="slot-icon">${icon}</div>
+      <div class="slot-info">
+        <div class="slot-name">${esc(save.name)}</div>
+        <div class="slot-meta">${save.age} Jahre · ${save.year} n. Chr. · ${esc(save.stand)}</div>
+      </div>
+      <div class="slot-actions">
+        <button class="btn btn-sm" onclick="loadGame(${i});event.stopPropagation()">Laden</button>
+        <button class="btn btn-sm btn-danger" onclick="confirmDelete(${i});event.stopPropagation()">✕</button>
+      </div>`;
+    div.onclick = () => loadGame(i);
     list.appendChild(div);
+  }
+
+  // Freien Slot für neues Leben suchen
+  const usedSlots = Object.keys(all).map(Number);
+  const nextFreeSlot = Array.from({ length: MAX_SLOTS }, (_, i) => i + 1).find(i => !usedSlots.includes(i));
+
+  // Schaltfläche "Neues Leben" nur wenn noch ein freier Slot vorhanden
+  if (nextFreeSlot !== undefined) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-gold mt-2';
+    btn.style.display = 'block';
+    btn.textContent = '✦ Neues Leben beginnen';
+    btn.onclick = () => openCreateScreen(nextFreeSlot);
+    list.appendChild(btn);
+  } else {
+    const p = document.createElement('p');
+    p.className = 'text-muted text-center mt-2';
+    p.style.fontSize = '0.8rem';
+    p.textContent = 'Alle Spielstandsplätze sind belegt. Lösche einen Spielstand, um ein neues Leben zu beginnen.';
+    list.appendChild(p);
   }
 }
 
@@ -764,7 +777,6 @@ function renderGame() {
   document.getElementById('game-desc').textContent = `${G.stand} · ${originLabel(G.origin)}`;
   document.getElementById('game-age-display').textContent = `${G.age} Jahre`;
   document.getElementById('game-year-display').textContent = `${G.year} n. Chr.`;
-  document.getElementById('game-topbar-title').textContent = G.dead ? '† ' + G.name : G.name;
   document.getElementById('game-gold').textContent = G.gold.toLocaleString('de-DE');
   document.getElementById('game-stand').textContent = G.stand;
   setBar('bar-health', G.health);
@@ -828,7 +840,7 @@ function chronikTooltip(changes = {}) {
     gold: 'Gold',
     health: 'Gesundheit',
     fitness: 'Kraft',
-    luck: 'Glück',
+    luck: 'Zufriedenheit',
     looks: 'Ansehen',
     bildung: 'Bildung',
   };
@@ -844,7 +856,7 @@ function renderChronikEffects(changes = {}) {
     gold: 'Gold',
     health: 'Gesundheit',
     fitness: 'Kraft',
-    luck: 'Glück',
+    luck: 'Zufriedenheit',
     looks: 'Ansehen',
     bildung: 'Bildung',
   };
@@ -853,9 +865,10 @@ function renderChronikEffects(changes = {}) {
   keys.forEach(k => {
     const val = changes[k] || 0;
     if (val === 0) return;
-    chips.push(`<span class="chronik-chip ${val > 0 ? 'good' : 'bad'}">${labels[k]} ${formatDelta(val)}</span>`);
+    chips.push({ val, html: `<span class="chronik-chip ${val > 0 ? 'good' : 'bad'}">${labels[k]} ${formatDelta(val)}</span>` });
   });
-  return chips.length ? chips.join('') : '<span class="chronik-chip none">Keine direkten Werteänderungen</span>';
+  chips.sort((a, b) => b.val - a.val);
+  return chips.length ? chips.map(c => c.html).join('') : '<span class="chronik-chip none">Keine direkten Werteänderungen</span>';
 }
 
 function renderChronik() {
@@ -888,6 +901,7 @@ function ageUp() {
   if (G.age > 40) G.health -= rnd(1,3);
   if (G.age > 60) G.health -= rnd(2,5);
   G.health = clamp(G.health, 0, 100);
+  G.luck = clamp(G.luck - 2.5, 0, 100);
 
   // Random event
   const event = rollEvent();
@@ -996,11 +1010,14 @@ function openMenu(which) {
         <strong>Körperkraft:</strong> ${G.fitness}%<br>
         <strong>Alter:</strong> ${G.age} Jahre<br>
         <hr style="border-color:var(--border);margin:0.75rem 0">
-        Einen Heiler aufsuchen kostet 15 Pfennig und stellt bis zu 20 Gesundheitspunkte wieder her.
+        ${G.heilerGenutzt
+          ? `<em style="color:var(--muted)">Du hast in diesem Jahr bereits einen Heiler aufgesucht.<br>Schreite ein Jahr voran, um ihn erneut besuchen zu können.</em>`
+          : `Einen Heiler aufsuchen kostet 15 Pfennig und stellt bis zu 20 Gesundheitspunkte wieder her.`}
       `,
-      actions: [
+      actions: G.heilerGenutzt ? [
+        { label: 'Schließen', action: closeModal }
+      ] : [
         { label: `Heiler aufsuchen (15 💰)`, action: () => {
-          if (G.heilerGenutzt) { closeModal(); showModal('Heiler', 'Du hast in diesem Jahr bereits einen Heiler aufgesucht.', [{ label: 'Ok', action: closeModal }]); return; }
           if (G.gold < 15) { closeModal(); showModal('Heiler', 'Du hast nicht genug Gold.', [{ label: 'Ok', action: closeModal }]); return; }
           G.heilerGenutzt = true;
           G.gold -= 15; const gain = rnd(10,20); G.health = clamp(G.health+gain, 0, 100);
@@ -1051,13 +1068,13 @@ function openMenu(which) {
           writeSave(activeSlot, G); renderGame();
           showModal('📜 Schreiben lernen', `Du lernst eifrig: <span style="color:var(--gold)">+${gainB} Bildung</span> · <span style="color:var(--red-l)">−5 💰</span>`, [{ label: 'Gut!', action: closeModal }]);
         }},
-        { label: '🍺 Im Wirtshaus feiern (+Glück)', action: () => {
+        { label: '🍺 Im Wirtshaus feiern (+Zufriedenheit)', action: () => {
           G.aktivitaetGenutzt = true;
           const cost = rnd(2,8); const gainL = rnd(5,12);
           G.gold = Math.max(0, G.gold-cost); G.luck = clamp(G.luck+gainL,0,100);
           addEventEntry('Du feierst im Wirtshaus und triffst viele interessante Leute.', 'good', { gold: -cost, luck: gainL });
           writeSave(activeSlot, G); renderGame();
-          showModal('🍺 Wirtshaus', `Ein fröhlicher Abend! <span style="color:var(--gold)">+${gainL} Glück</span> · <span style="color:var(--red-l)">−${cost} 💰</span>`, [{ label: 'Prost!', action: closeModal }]);
+          showModal('🍺 Wirtshaus', `Ein fröhlicher Abend! <span style="color:var(--gold)">+${gainL} Zufriedenheit</span> · <span style="color:var(--red-l)">−${cost} 💰</span>`, [{ label: 'Prost!', action: closeModal }]);
         }},
         { label: 'Schließen', action: closeModal }
       ]
