@@ -201,76 +201,82 @@ function ageUp() {
     addEventEntry('Dein Betrieb erwirtschaftet Gewinn.', 'good', { gold: betriebErtrag });
   }
 
+  function runJahresabschluss() {
+    if (lehreAbgeschlossenDiesesJahr) {
+      addEventEntry('Du hast deine Lehre abgeschlossen und bist nun Geselle.', 'event', {});
+    }
+
+    // Natural aging effects
+    if (G.age > 40) G.health -= rnd(1,3);
+    if (G.age > 60) G.health -= rnd(2,5);
+    G.health = clamp(G.health, 0, 100);
+    G.luck = clamp(G.luck - 2.5, 0, 100);
+
+    // Random event
+    let wurdeKrankDiesesJahr = false;
+    const event = rollEvent();
+    applyEffects(event.effects || {});
+    addEventEntry(event.text, event.type, event.effects || {});
+    if (event.krankheit && !G.krank) {
+      G.krank = true;
+      wurdeKrankDiesesJahr = true;
+      addEventEntry('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.', 'bad', {});
+    }
+
+    // Death check
+    if (G.health <= 0 || G.age >= G.maxAge) {
+      const healthBeforeDeath = G.health;
+      const diedFromHealth = G.health <= 0;
+      G.dead = true;
+      G.health = 0;
+      const cause = diedFromHealth ? deathCause() : 'hohem Alter';
+      addEventEntry(`${G.name} starb an ${cause}. Möge die Seele in Frieden ruhen.`, 'bad', { health: -healthBeforeDeath });
+      writeSave(activeSlot, G);
+      renderGame();
+      showModal(`† ${G.name}`, `Du hast dein Leben in einem Alter von <strong>${G.age} Jahren</strong> im Jahre ${G.year} beendet. ${G.name} wird in Erinnerung bleiben als ${G.stand} aus ${originLabel(G.origin)}.<br><br><em>„${eulogy()}"</em>`, [
+        { label: 'Chronik lesen', action: () => { closeModal(); openChronikScreen(); } },
+        { label: 'Hauptmenü', action: () => { closeModal(); saveAndExit(); } }
+      ]);
+      return;
+    }
+
+    writeSave(activeSlot, G);
+    renderGame();
+
+    if (lehreAbgeschlossenDiesesJahr) {
+      showModal('⚒️ Lehre abgeschlossen', 'Du hast deine Lehre abgeschlossen und bist nun Geselle.', [
+        { label: 'Weiter', action: closeModal }
+      ]);
+      return;
+    }
+
+    if (wurdeKrankDiesesJahr) {
+      pushJahresPopup('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.');
+    }
+
+    if (behandlungPopup) {
+      pushJahresPopup(behandlungPopup);
+    }
+
+    if (krankheitHeilungPopup) {
+      pushJahresPopup(krankheitHeilungPopup);
+    }
+
+    if (showJahresPopups(event)) {
+      return;
+    }
+  }
+
   if (G.age >= 12 && !G.lehre) {
-    showLehreAuswahl();
+    showLehreAuswahl(() => {
+      runJahresabschluss();
+    });
     writeSave(activeSlot, G);
     renderGame();
     return;
   }
 
-  if (lehreAbgeschlossenDiesesJahr) {
-    addEventEntry('Du hast deine Lehre abgeschlossen und bist nun Geselle.', 'event', {});
-  }
-
-  // Natural aging effects
-  if (G.age > 40) G.health -= rnd(1,3);
-  if (G.age > 60) G.health -= rnd(2,5);
-  G.health = clamp(G.health, 0, 100);
-  G.luck = clamp(G.luck - 2.5, 0, 100);
-
-  // Random event
-  let wurdeKrankDiesesJahr = false;
-  const event = rollEvent();
-  applyEffects(event.effects || {});
-  addEventEntry(event.text, event.type, event.effects || {});
-  if (event.krankheit && !G.krank) {
-    G.krank = true;
-    wurdeKrankDiesesJahr = true;
-    addEventEntry('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.', 'bad', {});
-  }
-
-  // Death check
-  if (G.health <= 0 || G.age >= G.maxAge) {
-    const healthBeforeDeath = G.health;
-    const diedFromHealth = G.health <= 0;
-    G.dead = true;
-    G.health = 0;
-    const cause = diedFromHealth ? deathCause() : 'hohem Alter';
-    addEventEntry(`${G.name} starb an ${cause}. Möge die Seele in Frieden ruhen.`, 'bad', { health: -healthBeforeDeath });
-    writeSave(activeSlot, G);
-    renderGame();
-    showModal(`† ${G.name}`, `Du hast dein Leben in einem Alter von <strong>${G.age} Jahren</strong> im Jahre ${G.year} beendet. ${G.name} wird in Erinnerung bleiben als ${G.stand} aus ${originLabel(G.origin)}.<br><br><em>„${eulogy()}"</em>`, [
-      { label: 'Chronik lesen', action: () => { closeModal(); openChronikScreen(); } },
-      { label: 'Hauptmenü', action: () => { closeModal(); saveAndExit(); } }
-    ]);
-    return;
-  }
-
-  writeSave(activeSlot, G);
-  renderGame();
-
-  if (lehreAbgeschlossenDiesesJahr) {
-    showModal('⚒️ Lehre abgeschlossen', 'Du hast deine Lehre abgeschlossen und bist nun Geselle.', [
-      { label: 'Weiter', action: closeModal }
-    ]);
-    return;
-  }
-
-  if (wurdeKrankDiesesJahr) {
-    pushJahresPopup('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.');
-  }
-
-  if (behandlungPopup) {
-    pushJahresPopup(behandlungPopup);
-  }
-
-  if (krankheitHeilungPopup) {
-    pushJahresPopup(krankheitHeilungPopup);
-  }
-
-  if (showJahresPopups(event)) {
-    return;
-  }
+  runJahresabschluss();
 }
 
 // ── EVENT SYSTEM ─────────────────────────────────────────
@@ -320,7 +326,7 @@ function standFromLehre(lehre) {
   return map[lehre] || 'Kind';
 }
 
-function waehleLehre(lehreKey) {
+function waehleLehre(lehreKey, onComplete = null) {
   if (!G || G.lehre) return;
 
   G.lehre = lehreKey;
@@ -333,16 +339,17 @@ function waehleLehre(lehreKey) {
   writeSave(activeSlot, G);
   renderGame();
   closeModal();
+  if (typeof onComplete === 'function') onComplete();
 }
 
-function showLehreAuswahl() {
+function showLehreAuswahl(onComplete = null) {
   showModal(
     '⚒️ Lehre wählen',
     'Du bist nun alt genug, um eine Lehre zu beginnen. Wähle deinen Berufsweg:',
     [
-      { label: 'Handwerker', action: () => waehleLehre('handwerker') },
-      { label: 'Gelehrter', action: () => waehleLehre('gelehrter') },
-      { label: 'Händler', action: () => waehleLehre('haendler') },
+      { label: 'Handwerker', action: () => waehleLehre('handwerker', onComplete) },
+      { label: 'Gelehrter', action: () => waehleLehre('gelehrter', onComplete) },
+      { label: 'Händler', action: () => waehleLehre('haendler', onComplete) },
     ]
   );
 }
