@@ -287,10 +287,18 @@ function openMenu(which) {
 				<strong>Kraft:</strong> ${statDisplayValue(G.fitness)}<br>
 				<strong>Bildung:</strong> ${bildungLabel(G.bildung)} (${statDisplayValue(G.bildung)})<br>
 				<strong>Geschick:</strong> ${statDisplayValue(G.geschick)}<br>
+				<strong>Inventar:</strong> ${G.inventar.length}/${inventarKapazitaet()} Plaetze belegt<br>
+				${G.aktiveEffekte?.bierJahre > 0 ? `<strong>Bier-Effekt:</strong> Noch ${G.aktiveEffekte.bierJahre} Jahre aktiv<br>` : ''}
+				<hr style="border-color:var(--border);margin:0.75rem 0">
+				<strong>Inventarinhalt:</strong><br>
+				${renderInventarListe()}
 				<hr style="border-color:var(--border);margin:0.75rem 0">
 				<em style="color:var(--muted);font-size:0.8rem">Weitere Charakterwerte und Beziehungen koennen hier spaeter erweitert werden.</em>
 			`,
-			actions: [{ label: 'Schließen', action: closeModal }]
+			actions: [
+				{ label: 'Inventar öffnen', action: openInventarMenu },
+				{ label: 'Schließen', action: closeModal }
+			]
 		},
 		familie: {
 			title: '👪 Familie',
@@ -416,11 +424,13 @@ function openMenu(which) {
 			body: () => `
 				<strong>Ort:</strong> Deine Stadtgemeinde<br>
 				<strong>Verwaltung:</strong> Rathaus verfügbar<br>
+				<strong>Markt:</strong> Waren und Ausruestung verfuegbar<br>
 				<strong>Schule:</strong> ${schoolStatusLabel()}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
-				<em style="color:var(--muted);font-size:0.8rem">Im Rathaus kannst du als Geselle die Meisterprüfung erwerben. Die Schule erreichst du von hier aus, solange dein Charakter im passenden Alter ist.</em>
+				<em style="color:var(--muted);font-size:0.8rem">Im Rathaus kannst du als Geselle die Meisterpruefung erwerben. Auf dem Markt kaufst du Waren fuer dein Inventar.</em>
 			`,
 			actions: [
+				{ label: '🏪 Markt', action: openMarktMenu },
 				{ label: '🏫 Schule', action: openSchuleMenu },
 				{ label: '🏛️ Rathaus', action: openRathausMenu },
 				{ label: 'Schließen', action: closeModal }
@@ -451,6 +461,54 @@ function openSchuleMenu() {
 	`, [
 		...(canGoToSchool() ? [{ label: 'Schule besuchen', action: besucheSchule }] : []),
 		{ label: 'Zurück', action: () => openMenu('stadt') },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function renderInventarListe() {
+	if (!G || !Array.isArray(G.inventar) || !G.inventar.length) {
+		return '<span style="color:var(--muted)">Dein Inventar ist leer.</span>';
+	}
+
+	return G.inventar.map((itemId, index) => {
+		const item = marktItem(itemId);
+		const name = item ? item.name : itemId;
+		const beschreibung = item ? item.beschreibung : 'Unbekannter Gegenstand';
+		const useButton = itemId === 'schwert'
+			? '<span style="color:var(--muted);font-size:0.78rem">Noch nicht nutzbar</span>'
+			: `<button class="btn btn-sm" style="margin-top:0.35rem" onclick="nutzeInventarItem(${index})">Benutzen</button>`;
+		return `<div style="margin-top:0.45rem;padding:0.5rem 0;border-bottom:1px solid var(--border)"><strong>${esc(name)}</strong><br><span style="color:var(--muted);font-size:0.8rem">${esc(beschreibung)}</span><br>${useButton}</div>`;
+	}).join('');
+}
+
+function openInventarMenu() {
+	showModal('🎒 Inventar', `
+		<strong>Plaetze:</strong> ${G.inventar.length}/${inventarKapazitaet()}<br>
+		${G.aktiveEffekte?.bierJahre > 0 ? `<strong>Bier-Effekt:</strong> Noch ${G.aktiveEffekte.bierJahre} Jahre aktiv<br>` : ''}
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		${renderInventarListe()}
+	`, [
+		{ label: 'Zurück zum Charakter', action: () => openMenu('charakter') },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function openMarktMenu() {
+	const items = Object.values(marktItemKatalog()).map(item => {
+		const disabled = G.gold < item.preis || inventarIstVoll();
+		const hinweis = inventarIstVoll()
+			? 'Inventar voll'
+			: (G.gold < item.preis ? 'Zu wenig Gold' : 'Kauf moeglich');
+		return `<div style="padding:0.55rem 0;border-bottom:1px solid var(--border)"><strong>${esc(item.name)}</strong> · ${item.preis} Pfennig<br><span style="color:var(--muted);font-size:0.8rem">${esc(item.beschreibung)}</span><br><button class="btn btn-sm" style="margin-top:0.35rem" onclick="kaufeMarktItem('${item.id}')" ${disabled ? 'disabled' : ''}>Kaufen</button> <span style="color:var(--muted);font-size:0.78rem">${hinweis}</span></div>`;
+	}).join('');
+
+	showModal('🏪 Markt', `
+		<strong>Gold:</strong> ${G.gold.toLocaleString('de-DE')} Pfennig<br>
+		<strong>Inventar:</strong> ${G.inventar.length}/${inventarKapazitaet()} Plaetze belegt<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${items}</div>
+	`, [
+		{ label: 'Zurück zur Stadt', action: () => openMenu('stadt') },
 		{ label: 'Schließen', action: closeModal }
 	]);
 }

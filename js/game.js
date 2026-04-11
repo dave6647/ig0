@@ -28,6 +28,33 @@ function heilerOption(typ) {
   return heilerOptionen()[typ] || null;
 }
 
+function marktItemKatalog() {
+  return {
+    heilsalbe: {
+      id: 'heilsalbe',
+      name: 'Heilsalbe',
+      preis: 60,
+      beschreibung: 'Heilt bei Benutzung 20 Gesundheit.'
+    },
+    bier: {
+      id: 'bier',
+      name: 'Bier',
+      preis: 25,
+      beschreibung: 'Sorgt 3 Jahre lang fuer +10 Zufriedenheit pro Jahr.'
+    },
+    schwert: {
+      id: 'schwert',
+      name: 'Schwert',
+      preis: 250,
+      beschreibung: 'Platzhalter fuer spaetere Kampf- und Statussysteme.'
+    }
+  };
+}
+
+function marktItem(itemId) {
+  return marktItemKatalog()[itemId] || null;
+}
+
 function defaultStats(origin) {
   const bases = {
     bauer:     { health:70, luck:50, fitness:75, looks:45, geschick:35, gold:20 },
@@ -55,6 +82,8 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     betrieb: false,
     mitarbeiter: 0,
     beziehungen: [],
+    inventar: [],
+    aktiveEffekte: { bierJahre: 0 },
     krank: false,
     pendingBehandlung: null,
     pendingKrankheitHeilung: null,
@@ -130,6 +159,14 @@ function ageUp() {
   G.schuleGenutzt = false;
   G.heilerGenutzt = false;
   G.krankheitHeilungGenutzt = false;
+
+  if (!G.aktiveEffekte) G.aktiveEffekte = { bierJahre: 0 };
+
+  if (G.aktiveEffekte.bierJahre > 0) {
+    G.luck = clamp(G.luck + 10, 0, 100);
+    G.aktiveEffekte.bierJahre -= 1;
+    addEventEntry('Das Bier aus deinem Vorrat hebt in diesem Jahr deine Stimmung.', 'good', { luck: 10 });
+  }
 
   // Behandlungen wirken erst im nächsten Jahr.
   if (G.pendingBehandlung) {
@@ -541,6 +578,102 @@ function heilungKrankheit(typ) {
   writeSave(activeSlot, G);
   renderGame();
   showModal('Krankheitsheilung', `Du hast die ${opt.name} aufgesucht. Das Ergebnis zeigt sich im nächsten Jahr.`, [{ label: 'Verstanden', action: closeModal }]);
+}
+
+function inventarKapazitaet() {
+  if (!G) return 0;
+  if (G.fitness >= 100) return 6;
+  if (G.fitness >= 80) return 5;
+  if (G.fitness >= 50) return 4;
+  return 3;
+}
+
+function inventarIstVoll() {
+  return !!G && G.inventar.length >= inventarKapazitaet();
+}
+
+function inventarEintragLabel(itemId) {
+  const item = marktItem(itemId);
+  return item ? item.name : itemId;
+}
+
+function kaufeMarktItem(itemId) {
+  if (!G) return;
+  const item = marktItem(itemId);
+  if (!item) return;
+
+  if (inventarIstVoll()) {
+    showModal('🏪 Markt', `Dein Inventar ist voll. Du hast ${G.inventar.length}/${inventarKapazitaet()} Plaetze belegt.`, [
+      { label: 'Zurück', action: openMarktMenu }
+    ]);
+    return;
+  }
+
+  if (G.gold < item.preis) {
+    showModal('🏪 Markt', `Du brauchst ${item.preis} Pfennig fuer ${item.name}.`, [
+      { label: 'Zurück', action: openMarktMenu }
+    ]);
+    return;
+  }
+
+  G.gold -= item.preis;
+  G.inventar.push(item.id);
+  addEventEntry(`Du kaufst ${item.name} auf dem Markt.`, 'good', { gold: -item.preis });
+  writeSave(activeSlot, G);
+  renderGame();
+  showModal('🏪 Markt', `${item.name} wurde fuer ${item.preis} Pfennig gekauft und liegt nun in deinem Inventar.`, [
+    { label: 'Weiter einkaufen', action: openMarktMenu },
+    { label: 'Inventar ansehen', action: openInventarMenu },
+    { label: 'Schließen', action: closeModal }
+  ]);
+}
+
+function nutzeInventarItem(index) {
+  if (!G) return;
+  if (!Number.isInteger(index) || index < 0 || index >= G.inventar.length) return;
+
+  const itemId = G.inventar[index];
+  const item = marktItem(itemId);
+  if (!item) return;
+
+  if (itemId === 'heilsalbe') {
+    if (G.health >= 100) {
+      showModal('Inventar', 'Deine Gesundheit ist bereits voll. Die Heilsalbe wuerde nichts bewirken.', [
+        { label: 'Zurück', action: openInventarMenu }
+      ]);
+      return;
+    }
+    const heilung = Math.min(20, 100 - G.health);
+    G.health = clamp(G.health + heilung, 0, 100);
+    G.inventar.splice(index, 1);
+    addEventEntry('Du verwendest Heilsalbe und versorgst deine Wunden.', 'good', { health: heilung });
+    writeSave(activeSlot, G);
+    renderGame();
+    showModal('Inventar', `Die Heilsalbe wirkt: <span style="color:var(--green-l)">+${heilung} Gesundheit</span>.`, [
+      { label: 'Zurück zum Inventar', action: openInventarMenu },
+      { label: 'Schließen', action: closeModal }
+    ]);
+    return;
+  }
+
+  if (itemId === 'bier') {
+    G.aktiveEffekte.bierJahre = (G.aktiveEffekte.bierJahre || 0) + 3;
+    G.inventar.splice(index, 1);
+    addEventEntry('Du lagerst Bier fuer die kommenden Jahre ein. Es wird deine Zufriedenheit fuer 3 Jahre steigern.', 'event', {});
+    writeSave(activeSlot, G);
+    renderGame();
+    showModal('Inventar', 'Das Bier ist aktiviert und gibt dir fuer die naechsten 3 Jahre jeweils +10 Zufriedenheit.', [
+      { label: 'Zurück zum Inventar', action: openInventarMenu },
+      { label: 'Schließen', action: closeModal }
+    ]);
+    return;
+  }
+
+  if (itemId === 'schwert') {
+    showModal('Inventar', 'Das Schwert ist aktuell nur ein Platzhalter und hat noch keine Funktion.', [
+      { label: 'Zurück zum Inventar', action: openInventarMenu }
+    ]);
+  }
 }
 
 function applyEffects(fx) {

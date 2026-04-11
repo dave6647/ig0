@@ -43,6 +43,9 @@ function migrateLegacySave(save) {
   if (!('meister' in save)) save.meister = false;
   if (!('betrieb' in save)) save.betrieb = false;
   if (!('mitarbeiter' in save)) save.mitarbeiter = 0;
+  if (!Array.isArray(save.inventar)) save.inventar = [];
+  if (!save.aktiveEffekte || typeof save.aktiveEffekte !== 'object') save.aktiveEffekte = { bierJahre: 0 };
+  if (typeof save.aktiveEffekte.bierJahre !== 'number') save.aktiveEffekte.bierJahre = 0;
   if (!('krank' in save)) save.krank = false;
   if (!('pendingBehandlung' in save)) save.pendingBehandlung = null;
   if (save.betrieb && (!Number.isInteger(save.mitarbeiter) || save.mitarbeiter < 1)) save.mitarbeiter = 1;
