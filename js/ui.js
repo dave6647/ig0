@@ -104,8 +104,7 @@ function startNewGame() {
 	const name = document.getElementById('create-name').value.trim();
 	if (!name) { alert('Bitte gib deinem Charakter einen Namen.'); return; }
 	const gender = document.getElementById('create-gender').value;
-	const year = document.getElementById('create-year').value;
-	G = newGame(activeSlot, name, gender, 'bauer', year, pendingStartFitness);
+	G = newGame(activeSlot, name, gender, 'bauer', 1150, pendingStartFitness);
 	addEventEntry(`${name} wurde geboren — eine neue Seele betritt die Welt.`, 'event');
 	writeSave(activeSlot, G);
 	renderGame();
@@ -149,18 +148,14 @@ function renderGame() {
 	document.getElementById('game-stand').textContent = G.stand;
 	setBar('bar-health', G.health);
 	setBar('bar-luck', G.luck);
-	setBar('bar-fitness', G.fitness);
-	setBar('bar-looks', G.looks);
 	document.getElementById('value-health').textContent = statDisplayValue(G.health);
 	document.getElementById('value-luck').textContent = statDisplayValue(G.luck);
-	document.getElementById('value-fitness').textContent = statDisplayValue(G.fitness);
-	document.getElementById('value-looks').textContent = statDisplayValue(G.looks);
 	document.getElementById('info-familie').textContent = G.family.vater ? `Vater, Mutter, ${G.family.geschwister === 0 ? 'keine' : G.family.geschwister} Geschwister` : '—';
 	document.getElementById('info-beruf').textContent = G.beruf || '—';
 	document.getElementById('info-gesundheit').textContent = healthLabel(G.health);
 	document.getElementById('info-vermoegen').textContent = G.gold + ' Pfennig';
-	document.getElementById('info-stadt').textContent = 'Rathaus';
-	document.getElementById('info-bildung').textContent = canGoToSchool() ? 'Schule möglich' : bildungLabel(G.bildung);
+	document.getElementById('info-stadt').textContent = canGoToSchool() ? 'Schule möglich' : '';
+	document.getElementById('info-charakter').textContent = '';
 	document.getElementById('btn-age-up').disabled = G.dead;
 	document.getElementById('btn-age-up').textContent = G.dead ? '† Gestorben' : '⏳ Jahr voranschreiten';
 	renderSchoolNotice();
@@ -173,7 +168,7 @@ function renderSchoolNotice() {
 
 	if (canGoToSchool()) {
 		notice.style.display = 'block';
-		notice.textContent = 'Schulbesuch ist in diesem Jahr möglich. Du findest ihn im Bereich Bildung.';
+		notice.textContent = 'Schulbesuch ist in diesem Jahr möglich. Du findest ihn unter Stadt und dann Schule.';
 		return;
 	}
 
@@ -225,9 +220,10 @@ function chronikTooltip(changes = {}) {
 		fitness: 'Kraft',
 		luck: 'Zufriedenheit',
 		looks: 'Ansehen',
-		bildung: 'Bildung'
+		bildung: 'Bildung',
+		geschick: 'Geschick'
 	};
-	const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
+	const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung', 'geschick'];
 	const parts = keys
 		.filter(key => typeof changes[key] === 'number' && changes[key] !== 0)
 		.map(key => `${labels[key]}: ${formatDelta(changes[key])}`);
@@ -241,9 +237,10 @@ function renderChronikEffects(changes = {}) {
 		fitness: 'Kraft',
 		luck: 'Zufriedenheit',
 		looks: 'Ansehen',
-		bildung: 'Bildung'
+		bildung: 'Bildung',
+		geschick: 'Geschick'
 	};
-	const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
+	const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung', 'geschick'];
 	const chips = [];
 	keys.forEach(k => {
 		const val = changes[k] || 0;
@@ -279,6 +276,22 @@ function openMenu(which) {
 		return;
 	}
 	const menus = {
+		charakter: {
+			title: '🧾 Charakter',
+			body: () => `
+				<strong>Gesundheit:</strong> ${healthLabel(G.health)} (${statDisplayValue(G.health)})<br>
+				<strong>Krankheit:</strong> ${G.krank ? 'Erkrankt' : 'Keine bekannte Krankheit'}<br>
+				<strong>Zufriedenheit:</strong> ${statDisplayValue(G.luck)}<br>
+				<strong>Verheiratet:</strong> Nein (Platzhalter)<br>
+				<strong>Ansehen:</strong> ${statDisplayValue(G.looks)}<br>
+				<strong>Kraft:</strong> ${statDisplayValue(G.fitness)}<br>
+				<strong>Bildung:</strong> ${bildungLabel(G.bildung)} (${statDisplayValue(G.bildung)})<br>
+				<strong>Geschick:</strong> ${statDisplayValue(G.geschick)}<br>
+				<hr style="border-color:var(--border);margin:0.75rem 0">
+				<em style="color:var(--muted);font-size:0.8rem">Weitere Charakterwerte und Beziehungen koennen hier spaeter erweitert werden.</em>
+			`,
+			actions: [{ label: 'Schließen', action: closeModal }]
+		},
 		familie: {
 			title: '👪 Familie',
 			body: () => `
@@ -314,31 +327,25 @@ function openMenu(which) {
 			title: '🌿 Gesundheit',
 			body: () => `
 				<strong>Zustand:</strong> ${healthLabel(G.health)} (${G.health}%)<br>
-				<strong>Körperkraft:</strong> ${G.fitness}%<br>
+				<strong>Krankheit:</strong> ${G.krank ? 'Erkrankt (−5/Jahr)' : 'Keine bekannte Krankheit'}<br>
+				<strong>Behandlung:</strong> ${behandlungStatusLabel()}<br>
+				${krankheitHeilungStatusLabel() ? `<strong>Krankheitsheilung:</strong> ${krankheitHeilungStatusLabel()}<br>` : ''}
 				<strong>Alter:</strong> ${G.age} Jahre<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
-				${G.heilerGenutzt
-					? `<em style="color:var(--muted)">Du hast in diesem Jahr bereits einen Heiler aufgesucht.<br>Schreite ein Jahr voran, um ihn erneut besuchen zu können.</em>`
-					: isKind()
-						? `Als Kind ist der Besuch beim Heiler kostenlos und stellt bis zu 20 Gesundheitspunkte wieder her.`
-						: `Einen Heiler aufsuchen kostet 15 Pfennig und stellt bis zu 20 Gesundheitspunkte wieder her.`}
+				${(G.heilerGenutzt || G.krankheitHeilungGenutzt)
+					? `<em style="color:var(--muted)">${[
+						G.heilerGenutzt ? 'Normale Heilung in diesem Jahr bereits genutzt.' : '',
+						G.krankheitHeilungGenutzt ? 'Krankheitsheilung in diesem Jahr bereits genutzt.' : ''
+					].filter(Boolean).join('<br>')}</em>`
+					: ''}
 			`,
-			actions: G.heilerGenutzt ? [
-				{ label: 'Schließen', action: closeModal }
-			] : [
-				{ label: isKind() ? 'Heiler aufsuchen (kostenlos)' : 'Heiler aufsuchen (15 💰)', action: () => {
-					const healerCost = isKind() ? 0 : 15;
-					if (G.gold < healerCost) { closeModal(); showModal('Heiler', 'Du hast nicht genug Gold.', [{ label: 'Ok', action: closeModal }]); return; }
-					G.heilerGenutzt = true;
-					G.gold -= healerCost;
-					const gain = rnd(10, 20);
-					G.health = clamp(G.health + gain, 0, 100);
-					const changes = healerCost > 0 ? { gold: -healerCost, health: gain } : { health: gain };
-					addEventEntry(`Du hast einen Heiler aufgesucht und fühlst dich ${gain} Punkte besser.`, 'good', changes);
-					writeSave(activeSlot, G); renderGame(); closeModal();
-				}},
-				{ label: 'Schließen', action: closeModal }
-			]
+			actions: (() => {
+				const acts = [];
+				acts.push({ label: isKind() ? 'Kloster' : 'Kloster (50 💰)', action: () => openHeilerMenu('kloster') });
+				if (!isKind()) acts.push({ label: 'Wundheiler (25 💰)', action: () => openHeilerMenu('wundheiler') });
+				acts.push({ label: 'Schließen', action: closeModal });
+				return acts;
+			})()
 		},
 		vermoegen: {
 			title: '🏺 Vermögen',
@@ -359,20 +366,22 @@ function openMenu(which) {
 			actions: G.aktivitaetGenutzt ? [
 				{ label: 'Schließen', action: closeModal }
 			] : [
-				{ label: G.age <= 7 ? '🧸 Spielen (+Kraft, +Zufriedenheit)' : '⚔️ Waffenübung (+Kraft)', action: () => {
+				{ label: G.age <= 7 ? '🧸 Spielen (+Kraft, +Zufriedenheit, +Geschick)' : '⚔️ Waffenübung (+Kraft, +Geschick)', action: () => {
 					G.aktivitaetGenutzt = true;
 					const gain = G.age <= 7 ? 2 : 3;
+					const gainGeschick = G.age <= 7 ? 1 : 2;
 					G.fitness = clamp(G.fitness + gain, 0, 100);
+					G.geschick = clamp(G.geschick + gainGeschick, 0, 100);
 					if (G.age <= 7) {
 						const gainL = rnd(5, 20);
 						G.luck = clamp(G.luck + gainL, 0, 100);
-						addEventEntry('Du spielst ausgelassen und wirst dabei ein kleines bisschen stärker.', 'good', { fitness: gain, luck: gainL });
+						addEventEntry('Du spielst ausgelassen und wirst dabei ein kleines bisschen stärker und geschickter.', 'good', { fitness: gain, geschick: gainGeschick, luck: gainL });
 						writeSave(activeSlot, G); renderGame();
-						showModal('🧸 Spielen', `Du tobst und spielst: <span style="color:var(--blue-l)">+${gain} Kraft</span> · <span style="color:var(--gold)">+${gainL} Zufriedenheit</span>.`, [{ label: 'Gut!', action: closeModal }]);
+						showModal('🧸 Spielen', `Du tobst und spielst: <span style="color:var(--blue-l)">+${gain} Kraft</span> · <span style="color:var(--gold)">+${gainL} Zufriedenheit</span> · <span style="color:var(--gold-l)">+${gainGeschick} Geschick</span>.`, [{ label: 'Gut!', action: closeModal }]);
 					} else {
-						addEventEntry('Du übst fleißig mit Schwert und Schild.', 'good', { fitness: gain });
+						addEventEntry('Du übst fleißig mit Schwert und Schild und verbesserst dein Geschick.', 'good', { fitness: gain, geschick: gainGeschick });
 						writeSave(activeSlot, G); renderGame();
-						showModal('⚔️ Waffenübung', `Du trainierst hart und gewinnst <span style="color:var(--blue-l)">+${gain} Kraft</span>.`, [{ label: 'Gut!', action: closeModal }]);
+						showModal('⚔️ Waffenübung', `Du trainierst hart und gewinnst <span style="color:var(--blue-l)">+${gain} Kraft</span> sowie <span style="color:var(--gold-l)">+${gainGeschick} Geschick</span>.`, [{ label: 'Gut!', action: closeModal }]);
 					}
 				}},
 				...(canPracticeWriting() ? [{ label: '📜 Schreiben lernen (+Bildung)', action: () => {
@@ -407,24 +416,13 @@ function openMenu(which) {
 			body: () => `
 				<strong>Ort:</strong> Deine Stadtgemeinde<br>
 				<strong>Verwaltung:</strong> Rathaus verfügbar<br>
-				<hr style="border-color:var(--border);margin:0.75rem 0">
-				<em style="color:var(--muted);font-size:0.8rem">Im Rathaus kannst du als Geselle die Meisterprüfung erwerben. Als Meister kannst du dann Betriebe aufbauen.</em>
-			`,
-			actions: [
-				{ label: '🏛️ Rathaus', action: openRathausMenu },
-				{ label: 'Schließen', action: closeModal }
-			]
-		},
-		bildung: {
-			title: '📜 Bildung',
-			body: () => `
-				<strong>Bildungsstand:</strong> ${bildungLabel(G.bildung)} (${G.bildung}%)<br>
 				<strong>Schule:</strong> ${schoolStatusLabel()}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
-				<em style="color:var(--muted);font-size:0.8rem">Schriftkundigkeit eröffnet neue Berufe und Optionen.</em>
+				<em style="color:var(--muted);font-size:0.8rem">Im Rathaus kannst du als Geselle die Meisterprüfung erwerben. Die Schule erreichst du von hier aus, solange dein Charakter im passenden Alter ist.</em>
 			`,
 			actions: [
-				...(canGoToSchool() ? [{ label: '🏫 Zur Schule gehen (+Bildung)', action: besucheSchule }] : []),
+				{ label: '🏫 Schule', action: openSchuleMenu },
+				{ label: '🏛️ Rathaus', action: openRathausMenu },
 				{ label: 'Schließen', action: closeModal }
 			]
 		},
@@ -441,6 +439,68 @@ function openMenu(which) {
 	const m = menus[which];
 	if (!m) return;
 	showModal(m.title, m.body(), m.actions);
+}
+
+function openSchuleMenu() {
+	showModal('🏫 Schule', `
+		<strong>Status:</strong> ${schoolStatusLabel()}<br>
+		<strong>Bildung:</strong> ${bildungLabel(G.bildung)} (${statDisplayValue(G.bildung)})<br>
+		<strong>Alter:</strong> ${G.age} Jahre<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<em style="color:var(--muted);font-size:0.8rem">Kinder zwischen 6 und 11 Jahren koennen die Schule einmal pro Jahr besuchen.</em>
+	`, [
+		...(canGoToSchool() ? [{ label: 'Schule besuchen', action: besucheSchule }] : []),
+		{ label: 'Zurück', action: () => openMenu('stadt') },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function openHeilerMenu(typ) {
+	const istKloster = typ === 'kloster';
+	const name = istKloster ? 'Kloster' : 'Wundheiler';
+	const kosten = istKloster ? (isKind() ? 'kostenlos' : '50 💰') : '25 💰';
+	const actions = [];
+
+	if (!G.heilerGenutzt) {
+		actions.push({
+			label: `Behandlung (${kosten})`,
+			action: () => kaufeBehandlung(typ)
+		});
+		} else {
+		actions.push({
+			label: 'Behandlung (bereits genutzt)',
+			action: () => showModal('Heilung', 'Du hast die normale Heilung in diesem Jahr bereits genutzt.', [
+				{ label: 'Zurück', action: () => openHeilerMenu(typ) }
+			])
+		});
+	}
+
+	if (G.krank) {
+		if (!G.krankheitHeilungGenutzt) {
+			actions.push({
+				label: `Krankheit heilen (${kosten})`,
+				action: () => heilungKrankheit(typ)
+			});
+		} else {
+			actions.push({
+				label: 'Krankheit heilen (bereits genutzt)',
+				action: () => showModal('Heilung', 'Du hast die Krankheitsheilung in diesem Jahr bereits genutzt.', [
+					{ label: 'Zurück', action: () => openHeilerMenu(typ) }
+				])
+			});
+		}
+	}
+
+	actions.push({ label: 'Zurück', action: () => openMenu('gesundheit') });
+
+	showModal(`${istKloster ? '⛪' : '🩹'} ${name}`, `
+		<strong>Heiler:</strong> ${name}<br>
+		<strong>Normale Heilung:</strong> Fehlschlag ${istKloster ? '20%' : '35%'}<br>
+		<strong>Krankheitsheilung:</strong> Fehlschlag ${istKloster ? '20%' : '35%'}<br>
+		<strong>Kosten:</strong> ${kosten}<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<em style="color:var(--muted)">Wähle, ob du deine Gesundheit stärken oder gezielt eine Krankheit behandeln willst.</em>
+	`, actions);
 }
 
 function openRathausMenu() {

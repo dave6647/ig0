@@ -4,7 +4,7 @@ let activeSlot = null;
 let pendingStartFitness = rnd(1, 20);
 
 function normalizeChanges(changes = {}) {
-  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung'];
+  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung', 'geschick'];
   const out = {};
   keys.forEach(k => {
     if (typeof changes[k] === 'number' && changes[k] !== 0) out[k] = changes[k];
@@ -17,11 +17,22 @@ function addEventEntry(text, type = '', changes = {}) {
   G.events.push({ age: G.age, text, type, changes: normalizeChanges(changes) });
 }
 
+function heilerOptionen() {
+  return {
+    kloster: { name: 'Kloster', kosten: isKind() ? 0 : 50, failChance: 0.20 },
+    wundheiler: { name: 'Wundheiler', kosten: 25, failChance: 0.35 }
+  };
+}
+
+function heilerOption(typ) {
+  return heilerOptionen()[typ] || null;
+}
+
 function defaultStats(origin) {
   const bases = {
-    bauer:     { health:70, luck:50, fitness:75, looks:45, gold:20 },
-    kaufmann:  { health:60, luck:70, fitness:50, looks:60, gold:200 },
-    klerus:    { health:65, luck:60, fitness:40, looks:50, gold:80 },
+    bauer:     { health:70, luck:50, fitness:75, looks:45, geschick:35, gold:20 },
+    kaufmann:  { health:60, luck:70, fitness:50, looks:60, geschick:55, gold:200 },
+    klerus:    { health:65, luck:60, fitness:40, looks:50, geschick:45, gold:80 },
   };
   return { ...(bases[origin] || bases.bauer) };
 }
@@ -32,6 +43,7 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     slot, name, gender, origin, year: parseInt(startYear),
     age: 0, dead: false,
     health: s.health, luck: s.luck, fitness: clamp(startFitness ?? rnd(1, 20), 1, 20), looks: s.looks,
+    geschick: s.geschick,
     gold: s.gold, stand: 'Kind',
     bildung: 0, ansehen: 0,
     events: [],
@@ -43,11 +55,15 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     betrieb: false,
     mitarbeiter: 0,
     beziehungen: [],
+    krank: false,
+    pendingBehandlung: null,
+    pendingKrankheitHeilung: null,
     maxAge: 80 + rnd(0, 15),
     aktivitaetGenutzt: false,
     arbeitGenutzt: false,
-    schuleGenutzt: false,
     heilerGenutzt: false,
+    krankheitHeilungGenutzt: false,
+    schuleGenutzt: false,
   };
 }
 
@@ -58,6 +74,54 @@ function ageUp() {
   if (!G || G.dead) return;
   if (typeof G.maxAge !== 'number') G.maxAge = 80 + rnd(0, 15);
   const warLehrling = isLehrling();
+  let krankheitHeilungPopup = null;
+  let behandlungPopup = null;
+  const jahresPopups = [];
+
+  function pushJahresPopup(textOrEntry, changes = {}) {
+    if (typeof textOrEntry === 'string' && textOrEntry.trim()) {
+      jahresPopups.push({ text: textOrEntry.trim(), changes: normalizeChanges(changes) });
+      return;
+    }
+    if (textOrEntry && typeof textOrEntry.text === 'string' && textOrEntry.text.trim()) {
+      jahresPopups.push({
+        text: textOrEntry.text.trim(),
+        changes: normalizeChanges(textOrEntry.changes || {})
+      });
+    }
+  }
+
+  function renderJahresPopupEntry(entry, idx, total) {
+    const effects = chronikTooltip(entry.changes || {})
+      ? `<div class="year-popup-effects">${renderChronikEffects(entry.changes || {})}</div>`
+      : '';
+    const borderStyle = idx === total - 1 ? 'none' : '1px solid var(--border)';
+    return `<div class="year-popup-entry" style="border-bottom:${borderStyle}"><div>${esc(entry.text)}</div>${effects}</div>`;
+  }
+
+  function showJahresPopups(eventObj = null) {
+    if (eventObj && (eventObj.type === 'event' || eventObj.type === 'bad' || eventObj.important)) {
+      pushJahresPopup({ text: eventObj.text, changes: eventObj.effects || {} });
+    }
+    if (!jahresPopups.length) return false;
+    if (jahresPopups.length === 1) {
+      showModal(`Jahr ${G.year} · Alter ${G.age}`, renderJahresPopupEntry(jahresPopups[0], 0, 1), [
+        { label: 'Weiter', action: closeModal }
+      ]);
+      return true;
+    }
+
+    const eintraege = jahresPopups
+      .map((entry, idx) => `<div><strong>Ereignis ${idx + 1}:</strong>${renderJahresPopupEntry(entry, idx, jahresPopups.length)}</div>`)
+      .join('');
+
+    showModal(
+      `Jahr ${G.year} · Alter ${G.age}`,
+      `<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${eintraege}</div>`,
+      [{ label: 'Weiter', action: closeModal }]
+    );
+    return true;
+  }
   G.age++;
   G.year++;
   const lehreAbgeschlossenDiesesJahr = warLehrling && !isLehrling();
@@ -65,6 +129,71 @@ function ageUp() {
   G.arbeitGenutzt = false;
   G.schuleGenutzt = false;
   G.heilerGenutzt = false;
+  G.krankheitHeilungGenutzt = false;
+
+  // Behandlungen wirken erst im nächsten Jahr.
+  if (G.pendingBehandlung) {
+    const beh = G.pendingBehandlung;
+    const istKloster = beh.typ === 'kloster';
+    const opt = heilerOption(beh.typ);
+    const failChance = opt ? opt.failChance : (istKloster ? 0.20 : 0.35);
+    const fehlgeschlagen = Math.random() < failChance;
+
+    if (fehlgeschlagen) {
+      const malus = rnd(2, 6);
+      G.health = clamp(G.health - malus, 0, 100);
+      behandlungPopup = {
+        text: istKloster
+          ? 'Die Behandlung im Kloster ist fehlgeschlagen und schwächt dich.'
+          : 'Die Behandlung beim Wundheiler ist fehlgeschlagen und schwächt dich.',
+        changes: { health: -malus }
+      };
+      addEventEntry(behandlungPopup.text, 'bad', { health: -malus });
+    } else {
+      const heal = rnd(15, 30);
+      G.health = clamp(G.health + heal, 0, 100);
+      behandlungPopup = {
+        text: istKloster
+          ? 'Die Klosterbehandlung zeigt Wirkung und stärkt deine Gesundheit.'
+          : 'Die Behandlung beim Wundheiler zeigt Wirkung und stärkt deine Gesundheit.',
+        changes: { health: heal }
+      };
+      addEventEntry(behandlungPopup.text, 'good', { health: heal });
+    }
+
+    G.pendingBehandlung = null;
+  }
+
+  // Krankheitsheilung wirkt am Ende des Jahres
+  if (G.pendingKrankheitHeilung) {
+    if (G.krank) {
+      const heilung = G.pendingKrankheitHeilung;
+      const istKloster = heilung.typ === 'kloster';
+      const opt = heilerOption(heilung.typ);
+      const failChance = opt ? opt.failChance : (istKloster ? 0.20 : 0.35);
+
+      if (Math.random() >= failChance) {
+        G.krank = false;
+        const text = istKloster
+          ? 'Die Klosterbehandlung hat deine Krankheit geheilt.'
+          : 'Die Behandlung beim Wundheiler hat deine Krankheit geheilt.';
+        addEventEntry(text, 'good', {});
+        krankheitHeilungPopup = text;
+      } else {
+        const text = istKloster
+          ? 'Die Klosterbehandlung konnte deine Krankheit nicht heilen.'
+          : 'Die Behandlung beim Wundheiler konnte deine Krankheit nicht heilen.';
+        addEventEntry(text, 'bad', {});
+        krankheitHeilungPopup = text;
+      }
+    }
+    G.pendingKrankheitHeilung = null;
+  }
+
+  if (G.krank) {
+    G.health = clamp(G.health - 5, 0, 100);
+    addEventEntry('Eine Krankheit schwächt dich in diesem Jahr.', 'bad', { health: -5 });
+  }
 
   if (G.betrieb && G.mitarbeiter > 0) {
     const betriebErtrag = G.mitarbeiter * 150;
@@ -90,9 +219,15 @@ function ageUp() {
   G.luck = clamp(G.luck - 2.5, 0, 100);
 
   // Random event
+  let wurdeKrankDiesesJahr = false;
   const event = rollEvent();
   applyEffects(event.effects || {});
   addEventEntry(event.text, event.type, event.effects || {});
+  if (event.krankheit && !G.krank) {
+    G.krank = true;
+    wurdeKrankDiesesJahr = true;
+    addEventEntry('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.', 'bad', {});
+  }
 
   // Death check
   if (G.health <= 0 || G.age >= G.maxAge) {
@@ -121,11 +256,20 @@ function ageUp() {
     return;
   }
 
-  if (event.type === 'event' || event.type === 'bad' || event.important) {
-    showModal(`Jahr ${G.year} · Alter ${G.age}`, esc(event.text), [
-      ...(event.choices || []),
-      { label: 'Weiter', action: closeModal }
-    ]);
+  if (wurdeKrankDiesesJahr) {
+    pushJahresPopup('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.');
+  }
+
+  if (behandlungPopup) {
+    pushJahresPopup(behandlungPopup);
+  }
+
+  if (krankheitHeilungPopup) {
+    pushJahresPopup(krankheitHeilungPopup);
+  }
+
+  if (showJahresPopups(event)) {
+    return;
   }
 }
 
@@ -143,6 +287,7 @@ function rollEvent() {
     // NEGATIVE
     { text: 'Du wurdest von einer Seuche heimgesucht und liegst krank darnieder.', type: 'bad', effects: { health: -rnd(8,20) } },
     { text: 'Diebe brachen in dein Heim ein und stahlen einen Teil deines Besitzes.', type: 'bad', effects: { gold: -rnd(5,30) } },
+    { text: 'Eine ansteckende Krankheit breitet sich im Dorf aus.', type: 'bad', effects: {}, krankheit: true },
     { text: 'Ein strenger Winter hat die Vorräte aufgebraucht.', type: 'bad', effects: { health: -rnd(3,8), gold: -rnd(5,15) } },
     { text: 'Du hast dich beim Holzhacken verletzt.', type: 'bad', effects: { health: -rnd(3,10) } },
     { text: 'Ein Streit mit einem Nachbarn ließ dich schlecht schlafen.', type: 'bad', effects: { luck: -rnd(2,5) } },
@@ -325,12 +470,79 @@ function stelleMitarbeiterEin() {
   showModal('⚒️ Betriebe', `Neuer Mitarbeiter eingestellt. Aktuell: ${G.mitarbeiter}/2.`, [{ label: 'Weiter', action: closeModal }]);
 }
 
+function kaufeBehandlung(typ) {
+  if (!G) return;
+  if (G.heilerGenutzt) {
+    showModal('Behandlung', 'Du hast in diesem Jahr bereits eine Behandlung gekauft.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  const opt = heilerOption(typ);
+  if (!opt) return;
+
+  if (G.gold < opt.kosten) {
+    showModal('Behandlung', `Du brauchst ${opt.kosten} Pfennig für diese Behandlung.`, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  G.heilerGenutzt = true;
+  G.gold -= opt.kosten;
+  G.pendingBehandlung = { typ: typ, jahr: G.year };
+  addEventEntry(`Die Behandlung im ${opt.name} wird im nächsten Jahr Wirkung zeigen.`, 'event', { gold: -opt.kosten });
+  writeSave(activeSlot, G);
+  renderGame();
+  showModal('Behandlung', `Die Behandlung im ${opt.name} wird im nächsten Jahr Wirkung zeigen.`, [{ label: 'Verstanden', action: closeModal }]);
+}
+
+function behandlungStatusLabel() {
+  if (!G || !G.pendingBehandlung) return 'Keine laufende Behandlung';
+  return G.pendingBehandlung.typ === 'kloster'
+    ? 'Klosterbehandlung wartet auf Wirkung'
+    : 'Wundheiler-Behandlung wartet auf Wirkung';
+}
+
+function krankheitHeilungStatusLabel() {
+  if (!G || !G.pendingKrankheitHeilung) return '';
+  return G.pendingKrankheitHeilung.typ === 'kloster'
+    ? 'Klosterbehandlung für Krankheit wartet'
+    : 'Wundheiler-Behandlung für Krankheit wartet';
+}
+
+function heilungKrankheit(typ) {
+  if (!G) return;
+  if (!G.krank) {
+    showModal('Krankheitsheilung', 'Du bist nicht krank.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (G.krankheitHeilungGenutzt) {
+    showModal('Krankheitsheilung', 'Du hast dich dieses Jahr bereits um Heilung bemüht.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  const opt = heilerOption(typ);
+  if (!opt) return;
+
+  if (G.gold < opt.kosten) {
+    showModal('Krankheitsheilung', `Du brauchst ${opt.kosten} Pfennig für diese Heilung.`, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  G.krankheitHeilungGenutzt = true;
+  G.gold -= opt.kosten;
+  G.pendingKrankheitHeilung = { typ: typ, jahr: G.year };
+  addEventEntry(`Du suchst die ${opt.name} auf zur Heilung deiner Krankheit. Das Ergebnis zeigt sich im nächsten Jahr.`, 'event', { gold: -opt.kosten });
+  writeSave(activeSlot, G);
+  renderGame();
+  showModal('Krankheitsheilung', `Du hast die ${opt.name} aufgesucht. Das Ergebnis zeigt sich im nächsten Jahr.`, [{ label: 'Verstanden', action: closeModal }]);
+}
+
 function applyEffects(fx) {
   if (fx.health !== undefined) G.health = clamp(G.health + fx.health, 0, 100);
   if (fx.luck   !== undefined) G.luck   = clamp(G.luck   + fx.luck,   0, 100);
   if (fx.gold   !== undefined) G.gold   = Math.max(0, G.gold + fx.gold);
   if (fx.fitness!== undefined) G.fitness= clamp(G.fitness+ fx.fitness, 0, 100);
   if (fx.looks  !== undefined) G.looks  = clamp(G.looks  + fx.looks,   0, 100);
+  if (fx.geschick !== undefined) G.geschick = clamp(G.geschick + fx.geschick, 0, 100);
 }
 
 // ── HELPERS ───────────────────────────────────────────────
@@ -392,6 +604,29 @@ function healthLabel(h) {
   if (h > 40) return 'Angeschlagen';
   if (h > 20) return 'Krank';
   return 'Sterbend';
+}
+
+// ── DEBUG FUNCTIONS ───────────────────────────────────────────
+function toggleDebugMenu() {
+  const menu = document.getElementById('debug-menu');
+  if (menu) menu.classList.toggle('open');
+}
+
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('debug-dropdown');
+  if (dd && !dd.contains(e.target)) {
+    const menu = document.getElementById('debug-menu');
+    if (menu) menu.classList.remove('open');
+  }
+});
+
+function debugMakeSick() {
+  if (!G) return;
+  G.krank = true;
+  G.health = clamp(G.health - 20, 0, 100);
+  addEventEntry('[DEBUG] Du wurdest krank gemacht!', 'bad', { health: -20 });
+  writeSave(activeSlot, G);
+  renderGame();
 }
 function bildungLabel(b) {
   if (b < 10) return 'Analphabet';

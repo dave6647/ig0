@@ -85,8 +85,6 @@
   .stat-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
   .bar-health  .stat-bar-fill { background: var(--green-l); }
   .bar-luck    .stat-bar-fill { background: var(--gold); }
-  .bar-fitness .stat-bar-fill { background: var(--blue-l); }
-  .bar-looks   .stat-bar-fill { background: #c084b8; }
 
   /* ── STAT GRID ── */
   .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
@@ -209,6 +207,16 @@
   @keyframes modalIn { from { transform: scale(0.93); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .modal-title { font-family: var(--font-head); color: var(--gold); margin-bottom: 0.75rem; }
   .modal-text { font-size: 0.9rem; color: var(--text); margin-bottom: 1rem; line-height: 1.6; }
+  .year-popup-entry {
+    position: relative;
+    padding: 0.55rem 0;
+  }
+  .year-popup-effects {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
 
   /* ── SAVE SLOT ── */
   .save-slot {
@@ -257,6 +265,15 @@
   .topbar-back { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 4px; }
   .topbar-back:hover { color: var(--gold); }
   .topbar-title { font-family: var(--font-head); font-size: 0.9rem; color: var(--gold-l); letter-spacing: 0.05em; }
+
+  /* ── DEBUG DROPDOWN ── */
+  .debug-dropdown { position: relative; }
+  .debug-toggle { background: var(--dark); border: 1px solid var(--gold); color: var(--gold); border-radius: 3px; padding: 0.2rem 0.45rem; font-size: 0.75rem; cursor: pointer; }
+  .debug-toggle:hover { background: var(--card-hover); }
+  .debug-menu { display: none; position: absolute; top: calc(100% + 4px); right: 0; background: var(--card); border: 1px solid var(--gold); border-radius: 4px; min-width: 160px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .debug-menu.open { display: block; }
+  .debug-menu button { display: block; width: 100%; background: none; border: none; color: var(--text); padding: 0.5rem 0.8rem; text-align: left; cursor: pointer; font-size: 0.82rem; }
+  .debug-menu button:hover { background: var(--border); color: var(--gold); }
 
   /* ── MISC ── */
   .text-center { text-align: center; }

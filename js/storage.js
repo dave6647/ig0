@@ -30,6 +30,8 @@ function deleteSave(slot) {
 function migrateLegacySave(save) {
   if (!save || typeof save !== 'object') return save;
 
+  const defaults = defaultStats(save.origin || 'bauer');
+
   if (save.origin === 'adel') save.origin = 'bauer';
   if (save.stand === 'Junker' || save.stand === 'Patrizier') save.stand = 'Kind';
   if (save.beruf === 'Müßiggang' || save.beruf === 'Gebet' || save.beruf === 'Feldarbeit' || save.beruf === 'Warenhandel') {
@@ -41,14 +43,26 @@ function migrateLegacySave(save) {
   if (!('meister' in save)) save.meister = false;
   if (!('betrieb' in save)) save.betrieb = false;
   if (!('mitarbeiter' in save)) save.mitarbeiter = 0;
+  if (!('krank' in save)) save.krank = false;
+  if (!('pendingBehandlung' in save)) save.pendingBehandlung = null;
   if (save.betrieb && (!Number.isInteger(save.mitarbeiter) || save.mitarbeiter < 1)) save.mitarbeiter = 1;
   if (save.mitarbeiter > 2) save.mitarbeiter = 2;
+  if (save.pendingBehandlung && !['kloster', 'wundheiler'].includes(save.pendingBehandlung.typ)) save.pendingBehandlung = null;
   if (save.lehre && typeof save.lehreJahr !== 'number') save.lehreJahr = save.year;
   if (!('schuleGenutzt' in save)) save.schuleGenutzt = false;
   if (!('aktivitaetGenutzt' in save)) save.aktivitaetGenutzt = false;
   if (!('arbeitGenutzt' in save)) save.arbeitGenutzt = false;
   if (!('heilerGenutzt' in save)) save.heilerGenutzt = false;
+  if (!('krankheitHeilungGenutzt' in save)) save.krankheitHeilungGenutzt = false;
+  if (!('pendingKrankheitHeilung' in save)) save.pendingKrankheitHeilung = null;
+  if (save.pendingKrankheitHeilung && !['kloster', 'wundheiler'].includes(save.pendingKrankheitHeilung.typ)) save.pendingKrankheitHeilung = null;
   if (typeof save.maxAge !== 'number') save.maxAge = 80 + rnd(0, 15);
+  if (typeof save.health !== 'number') save.health = defaults.health;
+  if (typeof save.luck !== 'number') save.luck = defaults.luck;
+  if (typeof save.fitness !== 'number') save.fitness = defaults.fitness;
+  if (typeof save.looks !== 'number') save.looks = defaults.looks;
+  if (typeof save.geschick !== 'number') save.geschick = defaults.geschick;
+  if (typeof save.bildung !== 'number') save.bildung = 0;
   if (!save.stand) save.stand = save.lehre ? standFromLehre(save.lehre) : 'Kind';
   if (!save.beruf) save.beruf = save.lehre ? berufFromLehre(save.lehre) : 'Keine Lehre';
 
