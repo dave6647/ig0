@@ -128,25 +128,27 @@ function ageUp() {
     return `<div class="year-popup-entry" style="border-bottom:${borderStyle}"><div>${esc(entry.text)}</div>${effects}</div>`;
   }
 
-  function showJahresPopups(eventObj = null) {
-    if (eventObj && (eventObj.type === 'event' || eventObj.type === 'bad' || eventObj.important)) {
-      pushJahresPopup({ text: eventObj.text, changes: eventObj.effects || {} });
-    }
-    if (!jahresPopups.length) return false;
-    if (jahresPopups.length === 1) {
-      showModal(`Jahr ${G.year} · Alter ${G.age}`, renderJahresPopupEntry(jahresPopups[0], 0, 1), [
+  function showJahresPopups() {
+    const eintraegeQuelle = jahresPopups.length
+      ? jahresPopups
+      : [{ text: 'Keine besonderen Vorkommnisse', changes: {} }];
+
+    const heading = `<div class="year-popup-heading">JAHR ${G.year}</div><div class="year-popup-subheading">Alter ${G.age}</div>`;
+
+    if (eintraegeQuelle.length === 1) {
+      showModal('Jahresbericht', `${heading}${renderJahresPopupEntry(eintraegeQuelle[0], 0, 1)}`, [
         { label: 'Weiter', action: closeModal }
       ]);
       return true;
     }
 
-    const eintraege = jahresPopups
-      .map((entry, idx) => `<div><strong>Ereignis ${idx + 1}:</strong>${renderJahresPopupEntry(entry, idx, jahresPopups.length)}</div>`)
+    const eintraege = eintraegeQuelle
+      .map((entry, idx) => `<div><strong>Ereignis ${idx + 1}:</strong>${renderJahresPopupEntry(entry, idx, eintraegeQuelle.length)}</div>`)
       .join('');
 
     showModal(
-      `Jahr ${G.year} · Alter ${G.age}`,
-      `<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${eintraege}</div>`,
+      'Jahresbericht',
+      `${heading}<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${eintraege}</div>`,
       [{ label: 'Weiter', action: closeModal }]
     );
     return true;
@@ -166,6 +168,7 @@ function ageUp() {
     G.luck = clamp(G.luck + 10, 0, 100);
     G.aktiveEffekte.bierJahre -= 1;
     addEventEntry('Das Bier aus deinem Vorrat hebt in diesem Jahr deine Stimmung.', 'good', { luck: 10 });
+    pushJahresPopup('Das Bier aus deinem Vorrat hebt in diesem Jahr deine Stimmung.', { luck: 10 });
   }
 
   // Behandlungen wirken erst im nächsten Jahr.
@@ -230,17 +233,20 @@ function ageUp() {
   if (G.krank) {
     G.health = clamp(G.health - 5, 0, 100);
     addEventEntry('Eine Krankheit schwächt dich in diesem Jahr.', 'bad', { health: -5 });
+    pushJahresPopup('Eine Krankheit schwächt dich in diesem Jahr.', { health: -5 });
   }
 
   if (G.betrieb && G.mitarbeiter > 0) {
     const betriebErtrag = G.mitarbeiter * 150;
     G.gold += betriebErtrag;
     addEventEntry('Dein Betrieb erwirtschaftet Gewinn.', 'good', { gold: betriebErtrag });
+    pushJahresPopup('Dein Betrieb erwirtschaftet Gewinn.', { gold: betriebErtrag });
   }
 
   function runJahresabschluss() {
     if (lehreAbgeschlossenDiesesJahr) {
       addEventEntry('Du hast deine Lehre abgeschlossen und bist nun Geselle.', 'event', {});
+      pushJahresPopup('Du hast deine Lehre abgeschlossen und bist nun Geselle.');
     }
 
     // Natural aging effects
@@ -254,10 +260,15 @@ function ageUp() {
     const event = rollEvent();
     applyEffects(event.effects || {});
     addEventEntry(event.text, event.type, event.effects || {});
+    const eventIstBesonders = event.type || event.important || event.krankheit || Object.keys(normalizeChanges(event.effects || {})).length > 0;
+    if (eventIstBesonders) {
+      pushJahresPopup({ text: event.text, changes: event.effects || {} });
+    }
     if (event.krankheit && !G.krank) {
       G.krank = true;
       wurdeKrankDiesesJahr = true;
       addEventEntry('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.', 'bad', {});
+      pushJahresPopup('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.');
     }
 
     // Death check
@@ -280,17 +291,6 @@ function ageUp() {
     writeSave(activeSlot, G);
     renderGame();
 
-    if (lehreAbgeschlossenDiesesJahr) {
-      showModal('⚒️ Lehre abgeschlossen', 'Du hast deine Lehre abgeschlossen und bist nun Geselle.', [
-        { label: 'Weiter', action: closeModal }
-      ]);
-      return;
-    }
-
-    if (wurdeKrankDiesesJahr) {
-      pushJahresPopup('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.');
-    }
-
     if (behandlungPopup) {
       pushJahresPopup(behandlungPopup);
     }
@@ -299,7 +299,7 @@ function ageUp() {
       pushJahresPopup(krankheitHeilungPopup);
     }
 
-    if (showJahresPopups(event)) {
+    if (showJahresPopups()) {
       return;
     }
   }

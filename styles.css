@@ -207,6 +207,22 @@
   @keyframes modalIn { from { transform: scale(0.93); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .modal-title { font-family: var(--font-head); color: var(--gold); margin-bottom: 0.75rem; }
   .modal-text { font-size: 0.9rem; color: var(--text); margin-bottom: 1rem; line-height: 1.6; }
+  .year-popup-heading {
+    font-family: var(--font-head);
+    font-size: 1.55rem;
+    letter-spacing: 0.08em;
+    color: var(--gold-l);
+    text-align: center;
+    margin-bottom: 0.15rem;
+  }
+  .year-popup-subheading {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.8rem;
+  }
   .year-popup-entry {
     position: relative;
     padding: 0.55rem 0;
