@@ -267,7 +267,7 @@ function ageUp() {
       };
       addEventEntry(behandlungPopup.text, 'bad', { health: -malus });
     } else {
-      const heal = rnd(15, 30);
+      const heal = rnd(25, 40);
       G.health = clamp(G.health + heal, 0, 100);
       behandlungPopup = {
         text: istKloster
@@ -308,9 +308,12 @@ function ageUp() {
   }
 
   if (G.krank) {
-    G.health = clamp(G.health - 5, 0, 100);
-    addEventEntry('Eine Krankheit schwächt dich in diesem Jahr.', 'bad', { health: -5 });
-    pushJahresPopup('Eine Krankheit schwächt dich in diesem Jahr.', { health: -5 });
+    let damage = 5;
+    if (G.age >= 60) damage = 15;
+    else if (G.age >= 45) damage = 10;
+    G.health = clamp(G.health - damage, 0, 100);
+    addEventEntry('Eine Krankheit schwächt dich in diesem Jahr.', 'bad', { health: -damage });
+    pushJahresPopup('Eine Krankheit schwächt dich in diesem Jahr.', { health: -damage });
   }
 
   if (G.betrieb && G.mitarbeiter > 0) {
@@ -333,20 +336,22 @@ function ageUp() {
     G.health = clamp(G.health, 0, 100);
     G.luck = clamp(G.luck - 2.5, 0, 100);
 
-    // Random event
+    // Krankheit - separates System mit fester 8% Chance
     let wurdeKrankDiesesJahr = false;
-    const event = rollEvent();
-    applyEffects(event.effects || {});
-    addEventEntry(event.text, event.type, event.effects || {});
-    const eventIstBesonders = event.type || event.important || event.krankheit || Object.keys(normalizeChanges(event.effects || {})).length > 0;
-    if (eventIstBesonders) {
-      pushJahresPopup({ text: event.text, changes: event.effects || {} });
-    }
-    if (event.krankheit && !G.krank) {
+    if (!G.krank && rollKrankheit()) {
       G.krank = true;
       wurdeKrankDiesesJahr = true;
-      addEventEntry('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.', 'bad', {});
-      pushJahresPopup('Du bist erkrankt. Solange die Krankheit anhält, verlierst du jedes Jahr 5 Gesundheit.');
+      addEventEntry('Du bist erkrankt, du solltest einen Arzt aufsuchen.', 'bad', {});
+      pushJahresPopup('Du bist erkrankt, du solltest einen Arzt aufsuchen.');
+    }
+
+    // Random event (altersgerecht)
+    const event = rollEvent(G.age);
+    applyEffects(event.effects || {});
+    addEventEntry(event.text, event.type, event.effects || {});
+    const eventIstBesonders = event.type || event.important || Object.keys(normalizeChanges(event.effects || {})).length > 0;
+    if (eventIstBesonders) {
+      pushJahresPopup({ text: event.text, changes: event.effects || {} });
     }
 
     // Death check
@@ -412,34 +417,8 @@ function ageUp() {
   runJahresabschluss();
 }
 
-// ── EVENT SYSTEM ─────────────────────────────────────────
-function rollEvent() {
-  const events = [
-    // POSITIVE
-    { text: 'Die Ernte war dieses Jahr reichlich. Dein Keller ist voll.', type: 'good', effects: { gold: +rnd(10,40) } },
-    { text: 'Du hast auf dem Markt ein gutes Geschäft gemacht.', type: 'good', effects: { gold: +rnd(5,25) } },
-    { text: 'Ein Wanderheiler schenkt dir einen Kräutertrank. Du fühlst dich besser.', type: 'good', effects: { health: +rnd(5,12) } },
-    { text: 'Ein Freund aus der Kindheit besucht dich. Ihr verbringt einen schönen Tag zusammen.', type: 'good', effects: { luck: +rnd(3,8) } },
-    { text: 'Du hast einen freien Nachmittag und genießt die Sonne auf dem Feld.', type: 'good', effects: { health: +3 } },
-    { text: 'Der Priester lobt dich für deine Tugend vor der Gemeinde.', type: 'good', effects: { looks: +rnd(2,6) } },
-    { text: 'Ein reicher Händler bietet dir Arbeit für eine Woche an.', type: 'good', effects: { gold: +rnd(15,35) } },
-    // NEGATIVE
-    { text: 'Du wurdest von einer Seuche heimgesucht und liegst krank darnieder.', type: 'bad', effects: { health: -rnd(8,20) } },
-    { text: 'Diebe brachen in dein Heim ein und stahlen einen Teil deines Besitzes.', type: 'bad', effects: { gold: -rnd(5,30) } },
-    { text: 'Eine ansteckende Krankheit breitet sich im Dorf aus.', type: 'bad', effects: {}, krankheit: true },
-    { text: 'Ein strenger Winter hat die Vorräte aufgebraucht.', type: 'bad', effects: { health: -rnd(3,8), gold: -rnd(5,15) } },
-    { text: 'Du hast dich beim Holzhacken verletzt.', type: 'bad', effects: { health: -rnd(3,10) } },
-    { text: 'Ein Streit mit einem Nachbarn ließ dich schlecht schlafen.', type: 'bad', effects: { luck: -rnd(2,5) } },
-    { text: 'Die Steuern wurden erhöht. Der König braucht Geld für seinen Feldzug.', type: 'bad', effects: { gold: -rnd(10,25) } },
-    // NEUTRAL
-    { text: 'Das Jahr verging ruhig. Nichts Besonderes ist passiert.', type: '', effects: {} },
-    { text: 'Du hast einen Pilger aus fernen Landen getroffen und allerlei Geschichten gehört.', type: 'event', effects: {} },
-    { text: 'Ein Turnier in der nahegelegenen Stadt zieht Schaulustige aus der ganzen Region an.', type: 'event', effects: {} },
-    { text: 'Die Glocken der Kirche läuten für einen Hochzug im Dorf.', type: 'event', effects: {} },
-    { text: 'Der Winter war kalt, aber du hast ihn gut überstanden.', type: '', effects: {} },
-  ];
-  return events[rnd(0, events.length - 1)];
-}
+// ── EVENT SYSTEM (Events sind jetzt in events.js ausgelagert) ──────────────
+// rollEvent(age) und rollKrankheit() werden von events.js bereitgestellt
 
 function berufFromLehre(lehre) {
   const map = {
