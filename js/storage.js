@@ -43,6 +43,8 @@ function migrateLegacySave(save) {
   if (!('meister' in save)) save.meister = false;
   if (!('betrieb' in save)) save.betrieb = false;
   if (!('mitarbeiter' in save)) save.mitarbeiter = 0;
+  if (!('titel' in save) || !['Unfreier', 'Bürger', 'Patrizier', 'Baron', 'Landsherr'].includes(save.titel)) save.titel = 'Bürger';
+  if (!('pendingTitelAufstieg' in save)) save.pendingTitelAufstieg = null;
   if (!Array.isArray(save.inventar)) save.inventar = [];
   if (!save.aktiveEffekte || typeof save.aktiveEffekte !== 'object') save.aktiveEffekte = { bierJahre: 0 };
   if (typeof save.aktiveEffekte.bierJahre !== 'number') save.aktiveEffekte.bierJahre = 0;
@@ -59,6 +61,13 @@ function migrateLegacySave(save) {
   if (!('krankheitHeilungGenutzt' in save)) save.krankheitHeilungGenutzt = false;
   if (!('pendingKrankheitHeilung' in save)) save.pendingKrankheitHeilung = null;
   if (save.pendingKrankheitHeilung && !['kloster', 'wundheiler'].includes(save.pendingKrankheitHeilung.typ)) save.pendingKrankheitHeilung = null;
+  if (save.pendingTitelAufstieg) {
+    const p = save.pendingTitelAufstieg;
+    const titelGueltig = ['Unfreier', 'Bürger', 'Patrizier', 'Baron', 'Landsherr'];
+    if (!titelGueltig.includes(p.von) || !titelGueltig.includes(p.nach) || typeof p.aktivAbJahr !== 'number') {
+      save.pendingTitelAufstieg = null;
+    }
+  }
   if (typeof save.maxAge !== 'number') save.maxAge = 80 + rnd(0, 15);
   if (typeof save.health !== 'number') save.health = defaults.health;
   if (typeof save.luck !== 'number') save.luck = defaults.luck;

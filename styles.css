@@ -118,6 +118,37 @@
   .char-desc { font-size: 0.8rem; color: var(--muted); }
   .char-year { font-size: 0.8rem; color: var(--muted); text-align: right; white-space: nowrap; }
 
+  /* ── STATUS STRIP ── */
+  .status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.45rem 0.55rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    min-height: 2rem;
+  }
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.08rem 0.42rem;
+    font-size: 0.76rem;
+    color: var(--text);
+    background: rgba(0, 0, 0, 0.15);
+  }
+  .status-chip.bad {
+    border-color: var(--red);
+    color: var(--red-l);
+  }
+  .status-chip.good {
+    border-color: var(--green);
+    color: var(--green-l);
+  }
+
   /* ── MENU GRID ── */
   .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem; }
   .menu-btn {

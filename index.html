@@ -82,6 +82,7 @@
       <button class="debug-toggle" onclick="toggleDebugMenu()">🐛</button>
       <div class="debug-menu" id="debug-menu">
         <button onclick="debugMakeSick(); toggleDebugMenu()">Krank machen</button>
+        <button onclick="debugAddGold(); toggleDebugMenu()">+10000 Gold</button>
       </div>
     </div>
   </div>
@@ -97,6 +98,8 @@
       </div>
       <div class="char-year" id="game-age-display"></div>
     </div>
+
+    <div class="status-strip mb-2" id="status-effects" style="display:none"></div>
 
     <!-- Attribut-Balken -->
     <div class="stat-grid mb-2">

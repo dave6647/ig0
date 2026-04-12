@@ -141,11 +141,11 @@ function renderGame() {
 	const icon = genderIcon(G.gender) + (G.lehre ? lehreIcon(G.lehre) : '');
 	document.getElementById('game-avatar').textContent = icon;
 	document.getElementById('game-name').textContent = G.name;
-	document.getElementById('game-desc').textContent = G.stand;
+	document.getElementById('game-desc').textContent = `${G.stand} · Titel: ${G.titel}`;
 	document.getElementById('game-age-display').textContent = `${G.age} Jahre`;
 	document.getElementById('game-year-display').textContent = `${G.year} n. Chr.`;
 	document.getElementById('game-gold').textContent = G.gold.toLocaleString('de-DE');
-	document.getElementById('game-stand').textContent = G.stand;
+	document.getElementById('game-stand').textContent = `${G.stand} · ${G.titel}`;
 	setBar('bar-health', G.health);
 	setBar('bar-luck', G.luck);
 	document.getElementById('value-health').textContent = statDisplayValue(G.health);
@@ -155,11 +155,33 @@ function renderGame() {
 	document.getElementById('info-gesundheit').textContent = healthLabel(G.health);
 	document.getElementById('info-vermoegen').textContent = G.gold + ' Pfennig';
 	document.getElementById('info-stadt').textContent = canGoToSchool() ? 'Schule möglich' : '';
-	document.getElementById('info-charakter').textContent = '';
+	document.getElementById('info-charakter').textContent = `Titel: ${G.titel}`;
 	document.getElementById('btn-age-up').disabled = G.dead;
 	document.getElementById('btn-age-up').textContent = G.dead ? '† Gestorben' : '⏳ Jahr voranschreiten';
+	renderStatusEffects();
 	renderSchoolNotice();
 	renderLog();
+}
+
+function renderStatusEffects() {
+	const row = document.getElementById('status-effects');
+	if (!row || !G) return;
+
+	const statuses = [];
+	if (G.krank) statuses.push({ icon: '🤒', text: 'Krank', kind: 'bad' });
+	if (G.pendingBehandlung) statuses.push({ icon: '🩹', text: 'Behandlung aktiv', kind: 'good' });
+	if (G.pendingKrankheitHeilung) statuses.push({ icon: '💊', text: 'Krankheitsheilung aktiv', kind: 'good' });
+
+	if (!statuses.length) {
+		row.style.display = 'none';
+		row.innerHTML = '';
+		return;
+	}
+
+	row.style.display = 'flex';
+	row.innerHTML = statuses
+		.map(s => `<span class="status-chip ${s.kind}" title="${escAttr(s.text)}">${s.icon} ${esc(s.text)}</span>`)
+		.join('');
 }
 
 function renderSchoolNotice() {
@@ -279,6 +301,8 @@ function openMenu(which) {
 		charakter: {
 			title: '🧾 Charakter',
 			body: () => `
+				<strong>Titel:</strong> ${G.titel}<br>
+				${G.pendingTitelAufstieg ? `<strong>Titelaufstieg:</strong> Zu ${G.pendingTitelAufstieg.nach} ab Jahr ${G.pendingTitelAufstieg.aktivAbJahr}<br>` : ''}
 				<strong>Gesundheit:</strong> ${healthLabel(G.health)} (${statDisplayValue(G.health)})<br>
 				<strong>Krankheit:</strong> ${G.krank ? 'Erkrankt' : 'Keine bekannte Krankheit'}<br>
 				<strong>Zufriedenheit:</strong> ${statDisplayValue(G.luck)}<br>
@@ -424,10 +448,11 @@ function openMenu(which) {
 			body: () => `
 				<strong>Ort:</strong> Deine Stadtgemeinde<br>
 				<strong>Verwaltung:</strong> Rathaus verfügbar<br>
+				<strong>Titel:</strong> ${G.titel}<br>
 				<strong>Markt:</strong> Waren und Ausruestung verfuegbar<br>
 				<strong>Schule:</strong> ${schoolStatusLabel()}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
-				<em style="color:var(--muted);font-size:0.8rem">Im Rathaus kannst du als Geselle die Meisterpruefung erwerben. Auf dem Markt kaufst du Waren fuer dein Inventar.</em>
+				<em style="color:var(--muted);font-size:0.8rem">Im Rathaus kannst du Titel kaufen und als Geselle die Meisterpruefung erwerben. Auf dem Markt kaufst du Waren fuer dein Inventar.</em>
 			`,
 			actions: [
 				{ label: '🏪 Markt', action: openMarktMenu },
@@ -562,6 +587,13 @@ function openHeilerMenu(typ) {
 }
 
 function openRathausMenu() {
+	const naechsterAufstieg = naechsterTitelAufstieg();
+	const titelStatus = G.pendingTitelAufstieg
+		? `Beantragt: ${G.pendingTitelAufstieg.nach} (gültig ab Jahr ${G.pendingTitelAufstieg.aktivAbJahr})`
+		: naechsterAufstieg
+			? `Nächster Aufstieg: ${naechsterAufstieg.von} zu ${naechsterAufstieg.nach} für ${naechsterAufstieg.kosten} Pfennig`
+			: 'Du hast bereits den höchsten Titel erreicht.';
+
 	const kannMeisterKaufen = isGeselle() && !G.meister;
 	const statusText = G.meister
 		? 'Du bist bereits Meister und darfst Betriebe aufbauen.'
@@ -570,11 +602,15 @@ function openRathausMenu() {
 			: 'Die Meisterprüfung ist erst nach Abschluss der Lehre verfügbar.';
 
 	showModal('🏛️ Rathaus', `
+		<strong>Adelstitel:</strong> ${G.titel}<br>
+		<strong>Titelstatus:</strong> ${titelStatus}<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
 		<strong>Meisterprüfung:</strong> 1000 Pfennig<br>
 		<strong>Status:</strong> ${statusText}<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
-		<em style="color:var(--muted);font-size:0.8rem">Mit Meistertitel kannst du im Berufsbereich Betriebe aufbauen und jährlich passives Einkommen erhalten.</em>
+		<em style="color:var(--muted);font-size:0.8rem">Titelaufstiege werden erst im folgenden Jahr gültig. Mit Meistertitel kannst du im Berufsbereich Betriebe aufbauen und jährlich passives Einkommen erhalten.</em>
 	`, [
+		...(!G.pendingTitelAufstieg && naechsterAufstieg ? [{ label: `Titelaufstieg kaufen (${naechsterAufstieg.kosten} 💰)`, action: kaufeTitelAufstieg }] : []),
 		...(kannMeisterKaufen ? [{ label: 'Meistertitel erwerben (1000 💰)', action: kaufeMeistertitel }] : []),
 		{ label: 'Zurück', action: () => openMenu('stadt') },
 		{ label: 'Schließen', action: closeModal }

@@ -55,6 +55,74 @@ function marktItem(itemId) {
   return marktItemKatalog()[itemId] || null;
 }
 
+const TITEL_STUFEN = ['Unfreier', 'Bürger', 'Patrizier', 'Baron', 'Landsherr'];
+const TITEL_AUFSTIEGS_KOSTEN = {
+  'Unfreier->Bürger': 500,
+  'Bürger->Patrizier': 5000,
+  'Patrizier->Baron': 15000,
+  'Baron->Landsherr': 25000
+};
+
+function titelIndex(titel) {
+  return TITEL_STUFEN.indexOf(titel);
+}
+
+function naechsterTitelAufstieg() {
+  if (!G) return null;
+  const idx = titelIndex(G.titel);
+  if (idx < 0 || idx >= TITEL_STUFEN.length - 1) return null;
+  const von = TITEL_STUFEN[idx];
+  const nach = TITEL_STUFEN[idx + 1];
+  const key = `${von}->${nach}`;
+  return { von, nach, kosten: TITEL_AUFSTIEGS_KOSTEN[key] ?? 0 };
+}
+
+function titelVorteilePlaceholderText(titel) {
+  return `Titel: ${titel}. Konkrete Titelvorteile folgen in einem späteren Update.`;
+}
+
+function pruefeTitelAufstiegAktivierung() {
+  if (!G || !G.pendingTitelAufstieg) return null;
+  const pending = G.pendingTitelAufstieg;
+  if (typeof pending.aktivAbJahr !== 'number' || G.year < pending.aktivAbJahr) return null;
+
+  G.titel = pending.nach;
+  G.pendingTitelAufstieg = null;
+  return pending;
+}
+
+function kaufeTitelAufstieg() {
+  if (!G) return;
+  if (G.pendingTitelAufstieg) {
+    showModal('🏛️ Rathaus', `Ein Titelaufstieg zu ${G.pendingTitelAufstieg.nach} ist bereits beantragt und wird ab dem Jahr ${G.pendingTitelAufstieg.aktivAbJahr} gültig.`, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  const aufstieg = naechsterTitelAufstieg();
+  if (!aufstieg) {
+    showModal('🏛️ Rathaus', 'Du hast bereits den höchsten Titel erreicht.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  if (G.gold < aufstieg.kosten) {
+    showModal('🏛️ Rathaus', `Du brauchst ${aufstieg.kosten} Pfennig für den Aufstieg von ${aufstieg.von} zu ${aufstieg.nach}.`, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  G.gold -= aufstieg.kosten;
+  G.pendingTitelAufstieg = {
+    von: aufstieg.von,
+    nach: aufstieg.nach,
+    gekauftImJahr: G.year,
+    aktivAbJahr: G.year + 1
+  };
+
+  addEventEntry(`Im Rathaus beantragst du den Titelaufstieg von ${aufstieg.von} zu ${aufstieg.nach}. Der Titel wird ab dem Jahr ${G.year + 1} gültig.`, 'event', { gold: -aufstieg.kosten });
+  writeSave(activeSlot, G);
+  renderGame();
+  showModal('🏛️ Titelaufstieg', `Der Aufstieg zu ${aufstieg.nach} wurde gekauft. Er wird im Jahr ${G.year + 1} wirksam.`, [{ label: 'Verstanden', action: closeModal }]);
+}
+
 function defaultStats(origin) {
   const bases = {
     bauer:     { health:70, luck:50, fitness:75, looks:45, geschick:35, gold:20 },
@@ -82,6 +150,8 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     betrieb: false,
     mitarbeiter: 0,
     beziehungen: [],
+    titel: 'Bürger',
+    pendingTitelAufstieg: null,
     inventar: [],
     aktiveEffekte: { bierJahre: 0 },
     krank: false,
@@ -161,6 +231,13 @@ function ageUp() {
   G.schuleGenutzt = false;
   G.heilerGenutzt = false;
   G.krankheitHeilungGenutzt = false;
+
+  const titelAufstiegAktiviert = pruefeTitelAufstiegAktivierung();
+  if (titelAufstiegAktiviert) {
+    const text = `Dein Titelaufstieg wird rechtskräftig. Du trägst nun den Titel ${titelAufstiegAktiviert.nach}.`;
+    addEventEntry(text, 'good', {});
+    pushJahresPopup(text);
+  }
 
   if (!G.aktiveEffekte) G.aktiveEffekte = { bierJahre: 0 };
 
@@ -244,6 +321,7 @@ function ageUp() {
   }
 
   function runJahresabschluss() {
+    const starteJahresereignisse = () => {
     if (lehreAbgeschlossenDiesesJahr) {
       addEventEntry('Du hast deine Lehre abgeschlossen und bist nun Geselle.', 'event', {});
       pushJahresPopup('Du hast deine Lehre abgeschlossen und bist nun Geselle.');
@@ -302,6 +380,24 @@ function ageUp() {
     if (showJahresPopups()) {
       return;
     }
+    };
+
+    if (!titelAufstiegAktiviert) {
+      starteJahresereignisse();
+      return;
+    }
+
+    showModal(
+      '👑 Die Stadt verkündet',
+      `<strong>Neuer Titel:</strong> ${titelAufstiegAktiviert.nach}<br><strong>Vorheriger Titel:</strong> ${titelAufstiegAktiviert.von}<br><hr style="border-color:var(--border);margin:0.75rem 0"><em style="color:var(--muted)">${titelVorteilePlaceholderText(titelAufstiegAktiviert.nach)}</em>`,
+      [{
+        label: 'Zu den Ereignissen',
+        action: () => {
+          closeModal();
+          starteJahresereignisse();
+        }
+      }]
+    );
   }
 
   if (G.age >= 12 && !G.lehre) {
@@ -765,6 +861,14 @@ function debugMakeSick() {
   G.krank = true;
   G.health = clamp(G.health - 20, 0, 100);
   addEventEntry('[DEBUG] Du wurdest krank gemacht!', 'bad', { health: -20 });
+  writeSave(activeSlot, G);
+  renderGame();
+}
+
+function debugAddGold() {
+  if (!G) return;
+  G.gold += 10000;
+  addEventEntry('[DEBUG] +10000 Gold hinzugefügt!', 'good', { gold: 10000 });
   writeSave(activeSlot, G);
   renderGame();
 }
