@@ -45,6 +45,106 @@ function migrateLegacySave(save) {
   if (!('mitarbeiter' in save)) save.mitarbeiter = 0;
   if (!('titel' in save) || !['Unfreier', 'Bürger', 'Patrizier', 'Baron', 'Landsherr'].includes(save.titel)) save.titel = 'Bürger';
   if (!('pendingTitelAufstieg' in save)) save.pendingTitelAufstieg = null;
+  if (!save.family || typeof save.family !== 'object') save.family = {};
+  if (!save.family.vater) save.family.vater = randomName('m');
+  if (!save.family.mutter) save.family.mutter = randomName('f');
+  const startTitelGueltig = ['Unfreier', 'Bürger', 'Patrizier'];
+  const familienTitel = startTitelGueltig.includes(save.family.vaterTitel)
+    ? save.family.vaterTitel
+    : (startTitelGueltig.includes(save.titel) ? save.titel : 'Bürger');
+  save.family.vaterTitel = familienTitel;
+  save.titel = familienTitel;
+  if (!Number.isInteger(save.family.geschwister) || save.family.geschwister < 0) save.family.geschwister = rnd(0, 3);
+  if (!Array.isArray(save.family.geschwisterNamen)) {
+    save.family.geschwisterNamen = [];
+    for (let i = 0; i < save.family.geschwister; i++) {
+      save.family.geschwisterNamen.push(randomName(rnd(0, 1) === 0 ? 'm' : 'f'));
+    }
+  }
+  if (!Array.isArray(save.family.mitglieder)) {
+    save.family.mitglieder = [];
+  }
+  if (save.family.mitglieder.length === 0) {
+    save.family.mitglieder.push({
+      id: 'f_vater', gruppe: 'familie', rolle: 'Vater', name: save.family.vater, gender: 'm', titel: familienTitel, beziehung: rnd(30, 75), status: 'familie'
+    });
+    save.family.mitglieder.push({
+      id: 'f_mutter', gruppe: 'familie', rolle: 'Mutter', name: save.family.mutter, gender: 'f', titel: familienTitel, beziehung: rnd(30, 75), status: 'familie'
+    });
+    for (let i = 0; i < save.family.geschwisterNamen.length; i++) {
+      const name = save.family.geschwisterNamen[i];
+      save.family.mitglieder.push({
+        id: `f_geschwister_${i + 1}`,
+        gruppe: 'familie',
+        rolle: 'Geschwister',
+        name,
+        gender: rnd(0, 1) === 0 ? 'm' : 'f',
+        titel: familienTitel,
+        beziehung: rnd(15, 55),
+        status: 'familie'
+      });
+    }
+  }
+  save.family.mitglieder = save.family.mitglieder
+    .filter(p => p && typeof p === 'object')
+    .map((p, idx) => {
+      const rolle = ['Vater', 'Mutter', 'Geschwister'].includes(p.rolle) ? p.rolle : 'Geschwister';
+      const alter = Number.isInteger(p.alter) && p.alter > 0 ? p.alter
+        : rolle === 'Vater' ? rnd(25, 40)
+        : rolle === 'Mutter' ? rnd(22, 38)
+        : rnd(1, 10);
+      const maxAlter = Number.isInteger(p.maxAlter) && p.maxAlter >= alter
+        ? p.maxAlter
+        : alter + rnd(0, Math.max(0, 80 - alter));
+      return {
+        id: String(p.id || `f_mitglied_${idx + 1}`),
+        gruppe: 'familie',
+        rolle,
+        name: String(p.name || randomName(p.gender === 'f' ? 'f' : 'm')),
+        gender: p.gender === 'f' ? 'f' : 'm',
+        alter,
+        maxAlter,
+        titel: familienTitel,
+        beziehung: clamp(typeof p.beziehung === 'number' ? p.beziehung : 0, -100, 100),
+        status: p.status === 'verstorben' ? 'verstorben' : 'familie'
+      };
+    });
+  if (!('ehepartner' in save.family)) save.family.ehepartner = null;
+  if (!('kinder' in save.family)) save.family.kinder = 0;
+
+  if (!save.beziehungen || typeof save.beziehungen !== 'object') {
+    save.beziehungen = generateBeziehungenPool();
+  }
+  if (!Array.isArray(save.beziehungen.personen) || save.beziehungen.personen.length === 0) {
+    save.beziehungen = generateBeziehungenPool();
+  }
+  if (!save.beziehungen.config || typeof save.beziehungen.config !== 'object') {
+    save.beziehungen.config = { einwohnerGesamt: 100, titelAnteile: { unfreier: 0.15, buerger: 0.50, patrizier: 0.20, baron: 0.15 } };
+  }
+  if (typeof save.beziehungen.config.interaktionenProJahr !== 'number') {
+    save.beziehungen.config.interaktionenProJahr = 5;
+  }
+
+  save.beziehungen.personen = save.beziehungen.personen
+    .filter(p => p && typeof p === 'object')
+    .map((p, idx) => {
+      const alter = Number.isInteger(p.alter) && p.alter > 0 ? p.alter : rnd(16, 55);
+      const maxAlter = Number.isInteger(p.maxAlter) && p.maxAlter >= alter
+        ? p.maxAlter
+        : alter + rnd(0, Math.max(0, 80 - alter));
+      return {
+        id: String(p.id || `p${idx + 1}`),
+        gruppe: 'stadt',
+        name: String(p.name || randomName(p.gender === 'f' ? 'f' : 'm')),
+        gender: p.gender === 'f' ? 'f' : 'm',
+        alter,
+        maxAlter,
+        titel: ['Unfreier', 'Bürger', 'Patrizier', 'Baron'].includes(p.titel) ? p.titel : 'Bürger',
+        beziehung: clamp(typeof p.beziehung === 'number' ? p.beziehung : 0, -100, 100),
+        status: p.status === 'ehepartner' ? 'ehepartner' : 'single'
+      };
+    });
+
   if (!Array.isArray(save.inventar)) save.inventar = [];
   if (!save.aktiveEffekte || typeof save.aktiveEffekte !== 'object') save.aktiveEffekte = { bierJahre: 0 };
   if (typeof save.aktiveEffekte.bierJahre !== 'number') save.aktiveEffekte.bierJahre = 0;
@@ -55,6 +155,7 @@ function migrateLegacySave(save) {
   if (save.pendingBehandlung && !['kloster', 'wundheiler'].includes(save.pendingBehandlung.typ)) save.pendingBehandlung = null;
   if (save.lehre && typeof save.lehreJahr !== 'number') save.lehreJahr = save.year;
   if (!('schuleGenutzt' in save)) save.schuleGenutzt = false;
+  if (!('beziehungsInteraktionenGenutzt' in save) || typeof save.beziehungsInteraktionenGenutzt !== 'number') save.beziehungsInteraktionenGenutzt = 0;
   if (!('aktivitaetGenutzt' in save)) save.aktivitaetGenutzt = false;
   if (!('arbeitGenutzt' in save)) save.arbeitGenutzt = false;
   if (!('heilerGenutzt' in save)) save.heilerGenutzt = false;

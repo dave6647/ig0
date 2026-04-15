@@ -63,6 +63,397 @@ const TITEL_AUFSTIEGS_KOSTEN = {
   'Baron->Landsherr': 25000
 };
 
+const BEZIEHUNGS_CONFIG = {
+  einwohnerGesamt: 100,
+  interaktionenProJahr: 5,
+  titelAnteile: {
+    unfreier: 0.15,
+    buerger: 0.50,
+    patrizier: 0.20,
+    baron: 0.15
+  }
+};
+
+const START_TITEL_STUFEN = ['Unfreier', 'Bürger', 'Patrizier'];
+
+function rollStartFamilienTitel() {
+  return START_TITEL_STUFEN[rnd(0, START_TITEL_STUFEN.length - 1)];
+}
+
+function startGoldByTitel(titel) {
+  if (titel === 'Unfreier') return 35;
+  if (titel === 'Bürger') return 100;
+  if (titel === 'Patrizier') return 160;
+  return 100;
+}
+
+function verteileAnteile(gesamt, anteile) {
+  const keys = Object.keys(anteile);
+  const counts = {};
+  let sum = 0;
+  keys.forEach(k => {
+    const c = Math.floor(gesamt * anteile[k]);
+    counts[k] = c;
+    sum += c;
+  });
+  let rest = gesamt - sum;
+  while (rest > 0) {
+    counts.buerger += 1;
+    rest -= 1;
+  }
+  return counts;
+}
+
+function randomTitelAusPool(pool) {
+  return pool.splice(rnd(0, pool.length - 1), 1)[0];
+}
+
+function baueTitelPool(gesamt) {
+  const counts = verteileAnteile(gesamt, BEZIEHUNGS_CONFIG.titelAnteile);
+  const pool = [];
+  for (let i = 0; i < counts.unfreier; i++) pool.push('Unfreier');
+  for (let i = 0; i < counts.buerger; i++) pool.push('Bürger');
+  for (let i = 0; i < counts.patrizier; i++) pool.push('Patrizier');
+  for (let i = 0; i < counts.baron; i++) pool.push('Baron');
+  return pool;
+}
+
+function generateFamilie(familienTitel) {
+  const geschwisterCount = rnd(0, 3);
+  const geschwisterNamen = [];
+  const mitglieder = [];
+  for (let i = 0; i < geschwisterCount; i++) {
+    const gender = rnd(0, 1) === 0 ? 'm' : 'f';
+    const name = randomName(gender);
+    const geschwisterAlter = rnd(1, 10);
+    geschwisterNamen.push(name);
+    mitglieder.push({
+      id: `f_geschwister_${i + 1}`,
+      gruppe: 'familie',
+      rolle: 'Geschwister',
+      name,
+      gender,
+      alter: geschwisterAlter,
+      maxAlter: geschwisterAlter + rnd(0, Math.max(0, 80 - geschwisterAlter)),
+      titel: familienTitel,
+      beziehung: rnd(15, 55),
+      status: 'familie'
+    });
+  }
+
+  const vater = randomName('m');
+  const mutter = randomName('f');
+
+  const mutterAlter = rnd(22, 38);
+  const vaterAlter = rnd(25, 40);
+  mitglieder.unshift({
+    id: 'f_mutter',
+    gruppe: 'familie',
+    rolle: 'Mutter',
+    name: mutter,
+    gender: 'f',
+    alter: mutterAlter,
+    maxAlter: mutterAlter + rnd(0, Math.max(0, 80 - mutterAlter)),
+    titel: familienTitel,
+    beziehung: rnd(30, 75),
+    status: 'familie'
+  });
+  mitglieder.unshift({
+    id: 'f_vater',
+    gruppe: 'familie',
+    rolle: 'Vater',
+    name: vater,
+    gender: 'm',
+    alter: vaterAlter,
+    maxAlter: vaterAlter + rnd(0, Math.max(0, 80 - vaterAlter)),
+    titel: familienTitel,
+    beziehung: rnd(30, 75),
+    status: 'familie'
+  });
+
+  return {
+    vater,
+    vaterTitel: familienTitel,
+    mutter,
+    geschwister: geschwisterCount,
+    geschwisterNamen,
+    mitglieder,
+    ehepartner: null,
+    kinder: 0
+  };
+}
+
+function baueAlterPool(gesamt) {
+  const jugend    = Math.round(gesamt * 0.25); // ¼: 6–14 Jahre
+  const erwachsen = Math.round(gesamt * 0.50); // ½: 16–35 Jahre
+  const reif      = gesamt - jugend - erwachsen; // ¼: 36–60 Jahre
+  const pool = [];
+  for (let i = 0; i < jugend; i++)    pool.push(rnd(6, 14));
+  for (let i = 0; i < erwachsen; i++) pool.push(rnd(16, 35));
+  for (let i = 0; i < reif; i++)      pool.push(rnd(36, 60));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = rnd(0, i);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
+
+function generateBeziehungenPool(gesamt = BEZIEHUNGS_CONFIG.einwohnerGesamt) {
+  const personen = [];
+  const titelPool = baueTitelPool(gesamt);
+  const alterPool = baueAlterPool(gesamt);
+  const maenner = Math.floor(gesamt / 2);
+  const frauen = gesamt - maenner;
+
+  for (let i = 0; i < maenner; i++) {
+    const alter = alterPool[i] ?? rnd(16, 35);
+    personen.push({
+      id: `p${i + 1}`,
+      gruppe: 'stadt',
+      name: randomName('m'),
+      gender: 'm',
+      alter,
+      maxAlter: alter + rnd(0, Math.max(0, 80 - alter)),
+      titel: randomTitelAusPool(titelPool),
+      beziehung: rnd(-10, 10),
+      status: 'single'
+    });
+  }
+  for (let i = 0; i < frauen; i++) {
+    const alter = alterPool[maenner + i] ?? rnd(16, 35);
+    personen.push({
+      id: `p${maenner + i + 1}`,
+      gruppe: 'stadt',
+      name: randomName('f'),
+      gender: 'f',
+      alter,
+      maxAlter: alter + rnd(0, Math.max(0, 80 - alter)),
+      titel: randomTitelAusPool(titelPool),
+      beziehung: rnd(-10, 10),
+      status: 'single'
+    });
+  }
+
+  for (let i = personen.length - 1; i > 0; i--) {
+    const j = rnd(0, i);
+    [personen[i], personen[j]] = [personen[j], personen[i]];
+  }
+
+  return {
+    config: {
+      einwohnerGesamt: gesamt,
+      titelAnteile: { ...BEZIEHUNGS_CONFIG.titelAnteile }
+    },
+    personen
+  };
+}
+
+function stadtBevoelkerung() {
+  if (!G) return [];
+  if (!G.beziehungen || !Array.isArray(G.beziehungen.personen)) {
+    G.beziehungen = generateBeziehungenPool();
+  }
+  return G.beziehungen.personen;
+}
+
+function findePerson(personId) {
+  const id = String(personId);
+  const stadt = stadtBevoelkerung().find(p => p.id === id);
+  if (stadt) return stadt;
+  const familie = Array.isArray(G?.family?.mitglieder) ? G.family.mitglieder.find(p => p.id === id) : null;
+  return familie || null;
+}
+
+function beziehungsInteraktionenUebrig() {
+  if (!G) return 0;
+  if (typeof G.beziehungsInteraktionenGenutzt !== 'number') G.beziehungsInteraktionenGenutzt = 0;
+  return Math.max(0, BEZIEHUNGS_CONFIG.interaktionenProJahr - G.beziehungsInteraktionenGenutzt);
+}
+
+function nutzeBeziehungsInteraktionOderWarnung() {
+  if (!G) return false;
+  const uebrig = beziehungsInteraktionenUebrig();
+  if (uebrig <= 0) {
+    showModal('Beziehungen', `Du hast in diesem Jahr bereits alle ${BEZIEHUNGS_CONFIG.interaktionenProJahr} Interaktionen genutzt.`, [{ label: 'Ok', action: closeModal }]);
+    return false;
+  }
+  G.beziehungsInteraktionenGenutzt += 1;
+  return true;
+}
+
+function aenderePersonBeziehung(person, delta) {
+  if (!person) return;
+  person.beziehung = clamp((person.beziehung || 0) + delta, -100, 100);
+}
+
+function standardAlterFuerPerson(person) {
+  if (!person || typeof person !== 'object') return 18;
+  if (person.gruppe === 'familie') {
+    if (person.rolle === 'Vater') return rnd(25, 40);
+    if (person.rolle === 'Mutter') return rnd(22, 38);
+    return rnd(1, 10);
+  }
+  return rnd(18, 65);
+}
+
+function incrementierePersonenAlter() {
+  if (!G) return [];
+  const todesereignisse = [];
+
+  if (Array.isArray(G.family?.mitglieder)) {
+    G.family.mitglieder.forEach(person => {
+      if (person.status === 'verstorben') return;
+      const basisAlter = Number.isInteger(person.alter) && person.alter >= 0
+        ? person.alter
+        : standardAlterFuerPerson(person);
+      if (!Number.isInteger(person.maxAlter)) {
+        person.maxAlter = basisAlter + rnd(0, Math.max(0, 80 - basisAlter));
+      }
+      person.alter = basisAlter + 1;
+      if (person.alter >= person.maxAlter) {
+        person.status = 'verstorben';
+        const anrede = person.gender === 'f' ? 'e' : '';
+        const text = `Dein${anrede} ${person.rolle} ${person.name} ist in diesem Jahr gestorben.`;
+        addEventEntry(text, 'bad', {});
+        todesereignisse.push(text);
+      }
+    });
+  }
+
+  if (Array.isArray(G.beziehungen?.personen)) {
+    const ueberlebende = [];
+    G.beziehungen.personen.forEach(person => {
+      const basisAlter = Number.isInteger(person.alter) && person.alter >= 0
+        ? person.alter
+        : standardAlterFuerPerson(person);
+      if (!Number.isInteger(person.maxAlter)) {
+        person.maxAlter = basisAlter + rnd(0, Math.max(0, 80 - basisAlter));
+      }
+      person.alter = basisAlter + 1;
+      if (person.alter >= person.maxAlter) {
+        if (person.status === 'ehepartner') {
+          const text = `Dein Ehepartner ${person.name} ist in diesem Jahr gestorben.`;
+          addEventEntry(text, 'bad', {});
+          todesereignisse.push(text);
+          if (G.family) G.family.ehepartner = null;
+        }
+        // Stadtbürger stirbt still
+      } else {
+        ueberlebende.push(person);
+      }
+    });
+    G.beziehungen.personen = ueberlebende;
+  }
+
+  return todesereignisse;
+}
+
+function kannMitPersonenInteragieren() {
+  return !!G && G.age >= 4;
+}
+
+function beziehungsAktionSprechen(personId) {
+  if (!G) return;
+  if (!kannMitPersonenInteragieren()) {
+    showModal('Beziehungen', 'Interaktionen sind erst ab 4 Jahren möglich.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  const person = findePerson(personId);
+  if (!person) return;
+  if (!nutzeBeziehungsInteraktionOderWarnung()) return;
+  const delta = rnd(-5, 15);
+  aenderePersonBeziehung(person, delta);
+  addEventEntry(`Du sprichst mit ${person.name}.`, delta >= 0 ? 'good' : 'bad', { luck: delta > 0 ? 1 : 0 });
+  writeSave(activeSlot, G);
+  renderGame();
+  showPersonInteraktion(person.id);
+}
+
+function beziehungsAktionGeschenk(personId) {
+  if (!G) return;
+  if (!kannMitPersonenInteragieren()) {
+    showModal('Beziehungen', 'Interaktionen sind erst ab 4 Jahren möglich.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  const person = findePerson(personId);
+  if (!person) return;
+  if (!nutzeBeziehungsInteraktionOderWarnung()) return;
+  const kosten = 80;
+  if (G.gold < kosten) {
+    G.beziehungsInteraktionenGenutzt = Math.max(0, G.beziehungsInteraktionenGenutzt - 1);
+    showModal('Beziehungen', 'Du hast nicht genug Gold für ein Geschenk (80 Gold).', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  G.gold -= kosten;
+  const delta = rnd(-10, 40);
+  aenderePersonBeziehung(person, delta);
+  addEventEntry(`Du machst ${person.name} ein Geschenk.`, delta >= 0 ? 'good' : 'bad', { gold: -kosten });
+  writeSave(activeSlot, G);
+  renderGame();
+  showPersonInteraktion(person.id);
+}
+
+function beziehungsAktionBeleidigen(personId) {
+  if (!G) return;
+  if (!kannMitPersonenInteragieren()) {
+    showModal('Beziehungen', 'Interaktionen sind erst ab 4 Jahren möglich.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  const person = findePerson(personId);
+  if (!person) return;
+  if (!nutzeBeziehungsInteraktionOderWarnung()) return;
+  const delta = -rnd(0, 30);
+  aenderePersonBeziehung(person, delta);
+  addEventEntry(`Du beleidigst ${person.name}.`, 'bad', {});
+  writeSave(activeSlot, G);
+  renderGame();
+  showPersonInteraktion(person.id);
+}
+
+function kannUmHandAnhalten(person) {
+  if (!G || !person) return false;
+  if (G.age < 16) return false;
+  if (G.family?.ehepartner) return false;
+  if (person.gruppe === 'familie' || person.status === 'familie') return false;
+  if (person.gender === G.gender) return false;
+  return (person.beziehung || 0) >= 80;
+}
+
+function umHandAnhalten(personId) {
+  if (!G) return;
+  if (!kannMitPersonenInteragieren()) {
+    showModal('Beziehungen', 'Interaktionen sind erst ab 4 Jahren möglich.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  const person = findePerson(personId);
+  if (!person || !kannUmHandAnhalten(person)) {
+    showModal('Beziehungen', 'Ein Antrag ist hier noch nicht möglich.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+  if (!nutzeBeziehungsInteraktionOderWarnung()) return;
+
+  const chance = clamp((person.beziehung || 0) / 100, 0, 1);
+  const erfolgreich = Math.random() < chance;
+
+  if (erfolgreich) {
+    G.family.ehepartner = person.name;
+    person.status = 'ehepartner';
+    addEventEntry(`${person.name} nimmt deinen Heiratsantrag an.`, 'good', { luck: 10 });
+    showModal('💍 Verlobung', `${esc(person.name)} hat deinen Antrag angenommen. Ihr seid nun verlobt/verheiratet.`, [
+      { label: 'Wunderbar', action: () => { closeModal(); openBeziehungenFamilieMenu(); } }
+    ]);
+  } else {
+    aenderePersonBeziehung(person, -15);
+    addEventEntry(`${person.name} lehnt deinen Heiratsantrag ab.`, 'bad', { luck: -8 });
+    showModal('💔 Verlobung', `${esc(person.name)} lehnt deinen Antrag ab. Eure Beziehung leidet darunter.`, [
+      { label: 'Verstanden', action: () => { closeModal(); showPersonInteraktion(person.id); } }
+    ]);
+  }
+
+  writeSave(activeSlot, G);
+  renderGame();
+}
+
 function titelIndex(titel) {
   return TITEL_STUFEN.indexOf(titel);
 }
@@ -105,7 +496,7 @@ function kaufeTitelAufstieg() {
   }
 
   if (G.gold < aufstieg.kosten) {
-    showModal('🏛️ Rathaus', `Du brauchst ${aufstieg.kosten} Pfennig für den Aufstieg von ${aufstieg.von} zu ${aufstieg.nach}.`, [{ label: 'Ok', action: closeModal }]);
+    showModal('🏛️ Rathaus', `Du brauchst ${aufstieg.kosten} Gold für den Aufstieg von ${aufstieg.von} zu ${aufstieg.nach}.`, [{ label: 'Ok', action: closeModal }]);
     return;
   }
 
@@ -134,23 +525,24 @@ function defaultStats(origin) {
 
 function newGame(slot, name, gender, origin, startYear, startFitness) {
   const s = defaultStats(origin);
+  const familienTitel = rollStartFamilienTitel();
   return {
     slot, name, gender, origin, year: parseInt(startYear),
     age: 0, dead: false,
     health: s.health, luck: s.luck, fitness: clamp(startFitness ?? rnd(1, 20), 1, 20), looks: s.looks,
     geschick: s.geschick,
-    gold: s.gold, stand: 'Kind',
+    gold: startGoldByTitel(familienTitel), stand: 'Kind',
     bildung: 0, ansehen: 0,
     events: [],
-    family: { vater: randomName('m'), mutter: randomName('f'), geschwister: rnd(0,3) },
+    family: generateFamilie(familienTitel),
     beruf: 'Keine Lehre',
     lehre: null,
     lehreJahr: null,
     meister: false,
     betrieb: false,
     mitarbeiter: 0,
-    beziehungen: [],
-    titel: 'Bürger',
+    beziehungen: generateBeziehungenPool(),
+    titel: familienTitel,
     pendingTitelAufstieg: null,
     inventar: [],
     aktiveEffekte: { bierJahre: 0 },
@@ -158,6 +550,7 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     pendingBehandlung: null,
     pendingKrankheitHeilung: null,
     maxAge: 80 + rnd(0, 15),
+    beziehungsInteraktionenGenutzt: 0,
     aktivitaetGenutzt: false,
     arbeitGenutzt: false,
     heilerGenutzt: false,
@@ -225,10 +618,12 @@ function ageUp() {
   }
   G.age++;
   G.year++;
+  const npcTodesereignisse = incrementierePersonenAlter();
   const lehreAbgeschlossenDiesesJahr = warLehrling && !isLehrling();
   G.aktivitaetGenutzt = false;
   G.arbeitGenutzt = false;
   G.schuleGenutzt = false;
+  G.beziehungsInteraktionenGenutzt = 0;
   G.heilerGenutzt = false;
   G.krankheitHeilungGenutzt = false;
 
@@ -329,6 +724,7 @@ function ageUp() {
       addEventEntry('Du hast deine Lehre abgeschlossen und bist nun Geselle.', 'event', {});
       pushJahresPopup('Du hast deine Lehre abgeschlossen und bist nun Geselle.');
     }
+    npcTodesereignisse.forEach(text => pushJahresPopup(text));
 
     // Natural aging effects
     if (G.age > 40) G.health -= rnd(1,3);
@@ -501,14 +897,14 @@ function arbeiteImBeruf() {
 
   const changes = { gold: lohn };
   let text = 'Du arbeitest fleißig und erhältst deinen Lohn.';
-  let modalText = `Du verdienst <span style="color:var(--gold)">+${lohn} Pfennig</span>.`;
+  let modalText = `Du verdienst <span style="color:var(--gold)">+${lohn} Gold</span>.`;
 
   if (lehrling) {
     const gainB = rnd(5, 15);
     G.bildung = clamp(G.bildung + gainB, 0, 100);
     changes.bildung = gainB;
     text = 'Du arbeitest in deinem Beruf, sammelst Erfahrung und lernst wichtige Fertigkeiten.';
-    modalText = `Du verdienst <span style="color:var(--gold)">+${lohn} Pfennig</span> und gewinnst <span style="color:var(--blue-l)">+${gainB} Bildung</span>.`;
+    modalText = `Du verdienst <span style="color:var(--gold)">+${lohn} Gold</span> und gewinnst <span style="color:var(--blue-l)">+${gainB} Bildung</span>.`;
   }
 
   addEventEntry(text, 'good', changes);
@@ -531,7 +927,7 @@ function kaufeMeistertitel() {
     return;
   }
   if (G.gold < 1000) {
-    showModal('🏛️ Rathaus', 'Du brauchst 1000 Pfennig für die Meisterprüfung.', [{ label: 'Ok', action: closeModal }]);
+    showModal('🏛️ Rathaus', 'Du brauchst 1000 Gold für die Meisterprüfung.', [{ label: 'Ok', action: closeModal }]);
     return;
   }
 
@@ -554,7 +950,7 @@ function erwerbeBetrieb() {
     return;
   }
   if (G.gold < 800) {
-    showModal('⚒️ Betriebe', 'Du brauchst 800 Pfennig, um einen Betrieb zu erwerben.', [{ label: 'Ok', action: closeModal }]);
+    showModal('⚒️ Betriebe', 'Du brauchst 800 Gold, um einen Betrieb zu erwerben.', [{ label: 'Ok', action: closeModal }]);
     return;
   }
 
@@ -577,7 +973,7 @@ function stelleMitarbeiterEin() {
     return;
   }
   if (G.gold < 300) {
-    showModal('⚒️ Betriebe', 'Du brauchst 300 Pfennig für einen weiteren Mitarbeiter.', [{ label: 'Ok', action: closeModal }]);
+    showModal('⚒️ Betriebe', 'Du brauchst 300 Gold für einen weiteren Mitarbeiter.', [{ label: 'Ok', action: closeModal }]);
     return;
   }
 
@@ -600,7 +996,7 @@ function kaufeBehandlung(typ) {
   if (!opt) return;
 
   if (G.gold < opt.kosten) {
-    showModal('Behandlung', `Du brauchst ${opt.kosten} Pfennig für diese Behandlung.`, [{ label: 'Ok', action: closeModal }]);
+    showModal('Behandlung', `Du brauchst ${opt.kosten} Gold für diese Behandlung.`, [{ label: 'Ok', action: closeModal }]);
     return;
   }
 
@@ -642,7 +1038,7 @@ function heilungKrankheit(typ) {
   if (!opt) return;
 
   if (G.gold < opt.kosten) {
-    showModal('Krankheitsheilung', `Du brauchst ${opt.kosten} Pfennig für diese Heilung.`, [{ label: 'Ok', action: closeModal }]);
+    showModal('Krankheitsheilung', `Du brauchst ${opt.kosten} Gold für diese Heilung.`, [{ label: 'Ok', action: closeModal }]);
     return;
   }
 
@@ -685,7 +1081,7 @@ function kaufeMarktItem(itemId) {
   }
 
   if (G.gold < item.preis) {
-    showModal('🏪 Markt', `Du brauchst ${item.preis} Pfennig fuer ${item.name}.`, [
+    showModal('🏪 Markt', `Du brauchst ${item.preis} Gold fuer ${item.name}.`, [
       { label: 'Zurück', action: openMarktMenu }
     ]);
     return;
@@ -696,7 +1092,7 @@ function kaufeMarktItem(itemId) {
   addEventEntry(`Du kaufst ${item.name} auf dem Markt.`, 'good', { gold: -item.preis });
   writeSave(activeSlot, G);
   renderGame();
-  showModal('🏪 Markt', `${item.name} wurde fuer ${item.preis} Pfennig gekauft und liegt nun in deinem Inventar.`, [
+  showModal('🏪 Markt', `${item.name} wurde fuer ${item.preis} Gold gekauft und liegt nun in deinem Inventar.`, [
     { label: 'Weiter einkaufen', action: openMarktMenu },
     { label: 'Inventar ansehen', action: openInventarMenu },
     { label: 'Schließen', action: closeModal }

@@ -20,7 +20,6 @@ const EVENT_GROUPS = {
     { text: 'Du fällst von einem Baum beim Klettern.', type: 'bad', effects: { health: -rnd(3,8), luck: -rnd(1,3) } },
     { text: 'Ein anderes Kind nimmt dir dein Lieblingsspielzeug weg.', type: 'bad', effects: { luck: -rnd(2,5) } },
     { text: 'Du verlierst dich im Wald und findest erst nach Stunden zurück.', type: 'bad', effects: { luck: -rnd(3,6) } },
-    { text: 'Der Lehrer strafte dich für Ungehorsam.', type: 'bad', effects: { luck: -rnd(1,4), bildung: -1 } },
     { text: 'Du brichst dir den Arm beim Spielen und liegst wochenlang im Bett.', type: 'bad', effects: { health: -rnd(8,15), fitness: -rnd(2,4) } },
     { text: 'Ein Sturm beschädigt das Haus deiner Eltern, und es wird angespannt.', type: 'bad', effects: { luck: -rnd(3,5) } },
   ],
@@ -77,6 +76,10 @@ const EVENT_GROUPS = {
  * @returns {object} Ein zufälliges Ereignis
  */
 function rollEvent(age) {
+  if (age < 4) {
+    return { text: 'Noch zu jung für größere Ereignisse.', type: '', effects: {} };
+  }
+
   let group;
   if (age < 12) {
     group = EVENT_GROUPS.kinder;

@@ -150,10 +150,11 @@ function renderGame() {
 	setBar('bar-luck', G.luck);
 	document.getElementById('value-health').textContent = statDisplayValue(G.health);
 	document.getElementById('value-luck').textContent = statDisplayValue(G.luck);
-	document.getElementById('info-familie').textContent = G.family.vater ? `Vater, Mutter, ${G.family.geschwister === 0 ? 'keine' : G.family.geschwister} Geschwister` : '—';
+	const eheInfo = G.family?.ehepartner ? `, Ehe: ${G.family.ehepartner}` : '';
+	document.getElementById('info-familie').textContent = G.family?.vater ? `Familie & Kontakte${eheInfo}` : '—';
 	document.getElementById('info-beruf').textContent = G.beruf || '—';
 	document.getElementById('info-gesundheit').textContent = healthLabel(G.health);
-	document.getElementById('info-vermoegen').textContent = G.gold + ' Pfennig';
+	document.getElementById('info-vermoegen').textContent = G.gold + ' Gold';
 	document.getElementById('info-stadt').textContent = canGoToSchool() ? 'Schule möglich' : '';
 	document.getElementById('info-charakter').textContent = `Titel: ${G.titel}`;
 	document.getElementById('btn-age-up').disabled = G.dead;
@@ -291,6 +292,148 @@ function renderChronik() {
 	}).join('');
 }
 
+function personenNachBeziehungswertDesc() {
+	return [...stadtBevoelkerung()].sort((a, b) => (b.beziehung || 0) - (a.beziehung || 0));
+}
+
+function personAlterBeziehungsText(person) {
+	const alter = Number.isInteger(person?.alter) && person.alter >= 0 ? person.alter : '—';
+	const beziehung = typeof person?.beziehung === 'number' ? person.beziehung : 0;
+	return `Alter: ${alter} · Beziehung: ${beziehung}`;
+}
+
+function openBeziehungenMenu() {
+	const personen = stadtBevoelkerung();
+	const freunde = personen.filter(p => (p.beziehung || 0) >= 40).length;
+	const umworbene = personen.filter(p => p.gender !== G.gender && !G.family?.ehepartner && (p.beziehung || 0) >= 80).length;
+	const interaktionenUebrig = beziehungsInteraktionenUebrig();
+
+	showModal('💞 Beziehungen', `
+		<strong>Stadtbewohner:</strong> ${personen.length}<br>
+		<strong>Freunde:</strong> ${freunde}<br>
+		<strong>Umworbene:</strong> ${umworbene}<br>
+		<strong>Interaktionen übrig:</strong> ${interaktionenUebrig}/5<br>
+		<strong>Ehepartner/in:</strong> ${esc(G.family?.ehepartner || 'Niemand')}<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<em style="color:var(--muted);font-size:0.8rem">Im Bereich Beziehungen findest du Familie, Freunde, Umworbene und alle Personen der Stadt.</em>
+	`, [
+		{ label: '👪 Familie', action: openBeziehungenFamilieMenu },
+		{ label: '🤝 Freunde', action: openBeziehungenFreundeMenu },
+		{ label: '💘 Umworbene', action: openBeziehungenUmworbeneMenu },
+		{ label: '🏘️ Alle Personen', action: openBeziehungenStadtMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function openBeziehungenFamilieMenu() {
+	const familienMitglieder = Array.isArray(G.family?.mitglieder) ? G.family.mitglieder : [];
+	const list = familienMitglieder.length
+		? familienMitglieder.map(p => {
+			const istVerstorben = p.status === 'verstorben';
+			return `
+			<div style="padding:0.55rem 0;border-bottom:1px solid var(--border);${istVerstorben ? 'opacity:0.55' : ''}">
+				<strong>${esc(p.name)}</strong> ${genderIcon(p.gender)} · ${p.rolle} · ${p.titel}${istVerstorben ? ' <em style="color:var(--muted)">†</em>' : ''}<br>
+				<span style="color:var(--muted);font-size:0.8rem">${personAlterBeziehungsText(p)}${istVerstorben ? ' · Verstorben' : ''}</span><br>
+				${istVerstorben ? '' : `<button class="btn btn-sm" style="margin-top:0.35rem" onclick="showPersonInteraktion('${p.id}')">Interagieren</button>`}
+			</div>
+		`;
+		}).join('')
+		: '<em style="color:var(--muted)">Keine Familienmitglieder gefunden.</em>';
+
+	showModal('👪 Familie', `
+		<strong>Ehepartner/in:</strong> ${esc(G.family?.ehepartner || 'Niemand')}<br>
+		${G.family?.kinder ? `<strong>Kinder:</strong> ${G.family.kinder}<br>` : ''}
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${list}</div>
+	`, [
+		{ label: 'Zurück', action: openBeziehungenMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function openBeziehungenFreundeMenu() {
+	const freunde = personenNachBeziehungswertDesc().filter(p => (p.beziehung || 0) >= 40);
+	const body = freunde.length
+		? `<div style="max-height:42vh;overflow-y:auto">${freunde.map(p => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border)"><strong>${esc(p.name)}</strong> (${p.titel}) · ${personAlterBeziehungsText(p)}</div>`).join('')}</div>`
+		: '<em style="color:var(--muted)">Noch keine Freunde vorhanden (ab 40 Beziehung).</em>';
+
+	showModal('🤝 Freunde', body, [
+		{ label: 'Zurück', action: openBeziehungenMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function openBeziehungenUmworbeneMenu() {
+	const umworbene = personenNachBeziehungswertDesc().filter(p => p.gender !== G.gender && (p.beziehung || 0) >= 80 && p.status !== 'ehepartner');
+	const body = umworbene.length
+		? `<div style="max-height:42vh;overflow-y:auto">${umworbene.map(p => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border)"><strong>${esc(p.name)}</strong> (${p.titel}) · ${personAlterBeziehungsText(p)}</div>`).join('')}</div>`
+		: '<em style="color:var(--muted)">Noch keine umworbenen Personen (ab 80 Beziehung, anderes Geschlecht).</em>';
+
+	showModal('💘 Umworbene', body, [
+		{ label: 'Zurück', action: openBeziehungenMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function openBeziehungenStadtMenu() {
+	const personen = personenNachBeziehungswertDesc();
+	const list = personen.map(p => `
+		<div style="padding:0.55rem 0;border-bottom:1px solid var(--border)">
+			<strong>${esc(p.name)}</strong> ${genderIcon(p.gender)} · ${p.titel}<br>
+			<span style="color:var(--muted);font-size:0.8rem">${personAlterBeziehungsText(p)}</span><br>
+			<button class="btn btn-sm" style="margin-top:0.35rem" onclick="showPersonInteraktion('${p.id}')">Interagieren</button>
+		</div>
+	`).join('');
+
+	showModal('🏘️ Personen der Stadt', `
+		<strong>Gesamt:</strong> ${personen.length}<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${list}</div>
+	`, [
+		{ label: 'Zurück', action: openBeziehungenMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function showPersonInteraktion(personId) {
+	const person = findePerson(personId);
+	if (!person) {
+		showModal('Beziehungen', 'Person nicht gefunden.', [{ label: 'Zurück', action: openBeziehungenStadtMenu }]);
+		return;
+	}
+	if (person.status === 'verstorben') {
+		showModal(`† ${person.name}`, `${esc(person.name)} ist verstorben (Alter ${person.alter}).`, [{ label: 'Zurück', action: openBeziehungenFamilieMenu }]);
+		return;
+	}
+
+	const canProposal = kannUmHandAnhalten(person);
+	const interaktionenUebrig = beziehungsInteraktionenUebrig();
+	const istZuJung = G.age < 4;
+	showModal(`🗣️ ${person.name}`, `
+		<strong>Name:</strong> ${esc(person.name)}<br>
+		${person.rolle ? `<strong>Rolle:</strong> ${esc(person.rolle)}<br>` : ''}
+		<strong>Geschlecht:</strong> ${person.gender === 'f' ? 'Weiblich' : 'Männlich'}<br>
+		<strong>Titel:</strong> ${person.titel}<br>
+		<strong>Alter:</strong> ${Number.isInteger(person.alter) && person.alter >= 0 ? person.alter : '—'}<br>
+		<strong>Beziehung:</strong> ${person.beziehung} / 100<br>
+		<strong>Interaktionen übrig:</strong> ${interaktionenUebrig}/5<br>
+		${person.status === 'ehepartner' ? '<strong>Status:</strong> Ehepartner/in<br>' : ''}
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<em style="color:var(--muted);font-size:0.8rem">${istZuJung
+			? 'Du kannst Personen bereits sehen, aber erst ab 4 Jahren mit ihnen interagieren.'
+			: 'Aktionen: Sprechen (-5 bis +15), Geschenk (80 Gold, -10 bis +40), Beleidigen (0 bis -30).'}</em>
+	`, [
+		...(istZuJung ? [] : [
+			{ label: 'Sprechen', action: () => beziehungsAktionSprechen(person.id) },
+			{ label: 'Geschenk machen (80 💰)', action: () => beziehungsAktionGeschenk(person.id) },
+			{ label: 'Beleidigen', action: () => beziehungsAktionBeleidigen(person.id) },
+			...(canProposal ? [{ label: '💍 Um die Hand anhalten', action: () => umHandAnhalten(person.id) }] : [])
+		]),
+		{ label: 'Zurück zur Liste', action: () => person.gruppe === 'familie' ? openBeziehungenFamilieMenu() : openBeziehungenStadtMenu() },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
 // ── MENU ACTIONS ─────────────────────────────────────────
 function openMenu(which) {
 	if (which === 'chronik') {
@@ -306,7 +449,7 @@ function openMenu(which) {
 				<strong>Gesundheit:</strong> ${healthLabel(G.health)} (${statDisplayValue(G.health)})<br>
 				<strong>Krankheit:</strong> ${G.krank ? 'Erkrankt' : 'Keine bekannte Krankheit'}<br>
 				<strong>Zufriedenheit:</strong> ${statDisplayValue(G.luck)}<br>
-				<strong>Verheiratet:</strong> Nein (Platzhalter)<br>
+				<strong>Verheiratet:</strong> ${G.family?.ehepartner ? `Ja, mit ${esc(G.family.ehepartner)}` : 'Nein'}<br>
 				<strong>Ansehen:</strong> ${statDisplayValue(G.looks)}<br>
 				<strong>Kraft:</strong> ${statDisplayValue(G.fitness)}<br>
 				<strong>Bildung:</strong> ${bildungLabel(G.bildung)} (${statDisplayValue(G.bildung)})<br>
@@ -325,17 +468,25 @@ function openMenu(which) {
 			]
 		},
 		familie: {
-			title: '👪 Familie',
+			title: '💞 Beziehungen',
 			body: () => `
-				<strong>Vater:</strong> ${esc(G.family.vater || 'Unbekannt')}<br>
-				<strong>Mutter:</strong> ${esc(G.family.mutter || 'Unbekannt')}<br>
-				<strong>Geschwister:</strong> ${G.family.geschwister === 0 ? 'Keine' : G.family.geschwister}<br>
-				${G.family.ehepartner ? `<strong>Ehepartner/in:</strong> ${esc(G.family.ehepartner)}<br>` : ''}
-				${G.family.kinder ? `<strong>Kinder:</strong> ${G.family.kinder}<br>` : ''}
+				<strong>Max. Interaktionen/Jahr:</strong> ${BEZIEHUNGS_CONFIG.interaktionenProJahr}<br>
+				<strong>Interaktionen übrig:</strong> ${beziehungsInteraktionenUebrig()}/${BEZIEHUNGS_CONFIG.interaktionenProJahr}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
-				<em style="color:var(--muted);font-size:0.8rem">Weitere Aktionen folgen in einer späteren Version.</em>
+				<strong>Familienmitglieder:</strong> ${Array.isArray(G.family?.mitglieder) ? G.family.mitglieder.length : 0}<br>
+				<strong>Freunde:</strong> ${stadtBevoelkerung().filter(p => (p.beziehung || 0) >= 40).length}<br>
+				<strong>Umworbene:</strong> ${stadtBevoelkerung().filter(p => p.gender !== G.gender && (p.beziehung || 0) >= 80 && p.status !== 'ehepartner').length}<br>
+				<strong>Ehepartner/in:</strong> ${esc(G.family.ehepartner || 'Niemand')}<br>
+				<hr style="border-color:var(--border);margin:0.75rem 0">
+				<em style="color:var(--muted);font-size:0.8rem">Im Beziehungsmenü kannst du mit allen Personen der Stadt interagieren.</em>
 			`,
-			actions: [{ label: 'Schließen', action: closeModal }]
+			actions: [
+				{ label: '👪 Familie', action: openBeziehungenFamilieMenu },
+				{ label: '🤝 Freunde', action: openBeziehungenFreundeMenu },
+				{ label: '💘 Umworbene', action: openBeziehungenUmworbeneMenu },
+				{ label: '🏘️ Alle Personen', action: openBeziehungenStadtMenu },
+				{ label: 'Schließen', action: closeModal }
+			]
 		},
 		beruf: {
 			title: '⚒️ Beruf',
@@ -345,7 +496,7 @@ function openMenu(which) {
 				<strong>Stand:</strong> ${esc(G.stand)}<br>
 				<strong>Titel:</strong> ${G.meister ? 'Meister' : (isGeselle() ? 'Geselle' : 'Kein Titel')}<br>
 				<strong>Betrieb:</strong> ${G.betrieb ? `Ja (${G.mitarbeiter}/2 Mitarbeiter)` : 'Nein'}<br>
-				<strong>Betriebs-Ertrag/Jahr:</strong> ${G.betrieb ? (G.mitarbeiter * 150) : 0} Pfennig<br>
+				<strong>Betriebs-Ertrag/Jahr:</strong> ${G.betrieb ? (G.mitarbeiter * 150) : 0} Gold<br>
 				<strong>Arbeit in diesem Jahr:</strong> ${G.lehre ? (G.arbeitGenutzt ? 'Bereits erledigt' : 'Noch offen') : 'Nicht verfügbar'}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
 			`,
@@ -382,7 +533,7 @@ function openMenu(which) {
 		vermoegen: {
 			title: '🏺 Vermögen',
 			body: () => `
-				<strong>Gold:</strong> ${G.gold.toLocaleString('de-DE')} Pfennig<br>
+				<strong>Gold:</strong> ${G.gold.toLocaleString('de-DE')} Gold<br>
 				<strong>Beruf:</strong> ${esc(G.beruf)}<br>
 				<strong>Steuerlast:</strong> ${G.origin === 'klerus' ? 'Keine' : 'Hoch'}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
@@ -418,7 +569,7 @@ function openMenu(which) {
 				}},
 				...(canPracticeWriting() ? [{ label: '📜 Schreiben lernen (+Bildung)', action: () => {
 					const schreibenKosten = isKind() ? 0 : 5;
-					if (G.gold < schreibenKosten) { showModal('Bildung', 'Du brauchst 5 Pfennig für Tinte und Pergament.', [{ label: 'Ok', action: closeModal }]); return; }
+					if (G.gold < schreibenKosten) { showModal('Bildung', 'Du brauchst 5 Gold für Tinte und Pergament.', [{ label: 'Ok', action: closeModal }]); return; }
 					G.aktivitaetGenutzt = true;
 					G.gold -= schreibenKosten;
 					const gainB = rnd(3, 5);
@@ -524,11 +675,11 @@ function openMarktMenu() {
 		const hinweis = inventarIstVoll()
 			? 'Inventar voll'
 			: (G.gold < item.preis ? 'Zu wenig Gold' : 'Kauf moeglich');
-		return `<div style="padding:0.55rem 0;border-bottom:1px solid var(--border)"><strong>${esc(item.name)}</strong> · ${item.preis} Pfennig<br><span style="color:var(--muted);font-size:0.8rem">${esc(item.beschreibung)}</span><br><button class="btn btn-sm" style="margin-top:0.35rem" onclick="kaufeMarktItem('${item.id}')" ${disabled ? 'disabled' : ''}>Kaufen</button> <span style="color:var(--muted);font-size:0.78rem">${hinweis}</span></div>`;
+		return `<div style="padding:0.55rem 0;border-bottom:1px solid var(--border)"><strong>${esc(item.name)}</strong> · ${item.preis} Gold<br><span style="color:var(--muted);font-size:0.8rem">${esc(item.beschreibung)}</span><br><button class="btn btn-sm" style="margin-top:0.35rem" onclick="kaufeMarktItem('${item.id}')" ${disabled ? 'disabled' : ''}>Kaufen</button> <span style="color:var(--muted);font-size:0.78rem">${hinweis}</span></div>`;
 	}).join('');
 
 	showModal('🏪 Markt', `
-		<strong>Gold:</strong> ${G.gold.toLocaleString('de-DE')} Pfennig<br>
+		<strong>Gold:</strong> ${G.gold.toLocaleString('de-DE')} Gold<br>
 		<strong>Inventar:</strong> ${G.inventar.length}/${inventarKapazitaet()} Plaetze belegt<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
 		<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${items}</div>
@@ -591,21 +742,21 @@ function openRathausMenu() {
 	const titelStatus = G.pendingTitelAufstieg
 		? `Beantragt: ${G.pendingTitelAufstieg.nach} (gültig ab Jahr ${G.pendingTitelAufstieg.aktivAbJahr})`
 		: naechsterAufstieg
-			? `Nächster Aufstieg: ${naechsterAufstieg.von} zu ${naechsterAufstieg.nach} für ${naechsterAufstieg.kosten} Pfennig`
+			? `Nächster Aufstieg: ${naechsterAufstieg.von} zu ${naechsterAufstieg.nach} für ${naechsterAufstieg.kosten} Gold`
 			: 'Du hast bereits den höchsten Titel erreicht.';
 
 	const kannMeisterKaufen = isGeselle() && !G.meister;
 	const statusText = G.meister
 		? 'Du bist bereits Meister und darfst Betriebe aufbauen.'
 		: isGeselle()
-			? 'Als Geselle kannst du hier die Meisterprüfung für 1000 Pfennig ablegen.'
+			? 'Als Geselle kannst du hier die Meisterprüfung für 1000 Gold ablegen.'
 			: 'Die Meisterprüfung ist erst nach Abschluss der Lehre verfügbar.';
 
 	showModal('🏛️ Rathaus', `
 		<strong>Adelstitel:</strong> ${G.titel}<br>
 		<strong>Titelstatus:</strong> ${titelStatus}<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
-		<strong>Meisterprüfung:</strong> 1000 Pfennig<br>
+		<strong>Meisterprüfung:</strong> 1000 Gold<br>
 		<strong>Status:</strong> ${statusText}<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
 		<em style="color:var(--muted);font-size:0.8rem">Titelaufstiege werden erst im folgenden Jahr gültig. Mit Meistertitel kannst du im Berufsbereich Betriebe aufbauen und jährlich passives Einkommen erhalten.</em>
@@ -630,9 +781,9 @@ function openBetriebeMenu() {
 	showModal('⚒️ Betriebe', `
 		<strong>Betrieb vorhanden:</strong> ${hatBetrieb ? 'Ja' : 'Nein'}<br>
 		<strong>Mitarbeiter:</strong> ${hatBetrieb ? `${G.mitarbeiter}/2` : '0/2'}<br>
-		<strong>Jährlicher Ertrag:</strong> ${ertrag} Pfennig<br>
+		<strong>Jährlicher Ertrag:</strong> ${ertrag} Gold<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
-		<em style="color:var(--muted);font-size:0.8rem">Betrieb erwerben: 800 Pfennig. Neuer Mitarbeiter: 300 Pfennig. Pro Mitarbeiter erhältst du 150 Pfennig automatisch pro Jahr.</em>
+		<em style="color:var(--muted);font-size:0.8rem">Betrieb erwerben: 800 Gold. Neuer Mitarbeiter: 300 Gold. Pro Mitarbeiter erhältst du 150 Gold automatisch pro Jahr.</em>
 	`, [
 		...(!hatBetrieb ? [{ label: 'Betrieb erwerben (800 💰)', action: erwerbeBetrieb }] : []),
 		...(kannMitarbeiterEinstellen ? [{ label: 'Mitarbeiter einstellen (300 💰)', action: stelleMitarbeiterEin }] : []),
