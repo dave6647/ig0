@@ -66,10 +66,10 @@ function migrateLegacySave(save) {
   }
   if (save.family.mitglieder.length === 0) {
     save.family.mitglieder.push({
-      id: 'f_vater', gruppe: 'familie', rolle: 'Vater', name: save.family.vater, gender: 'm', titel: familienTitel, beziehung: rnd(30, 75), status: 'familie'
+      id: 'f_vater', gruppe: 'familie', rolle: 'Vater', name: save.family.vater, gender: 'm', titel: familienTitel, beziehung: rnd(40, 60), status: 'familie'
     });
     save.family.mitglieder.push({
-      id: 'f_mutter', gruppe: 'familie', rolle: 'Mutter', name: save.family.mutter, gender: 'f', titel: familienTitel, beziehung: rnd(30, 75), status: 'familie'
+      id: 'f_mutter', gruppe: 'familie', rolle: 'Mutter', name: save.family.mutter, gender: 'f', titel: familienTitel, beziehung: rnd(40, 60), status: 'familie'
     });
     for (let i = 0; i < save.family.geschwisterNamen.length; i++) {
       const name = save.family.geschwisterNamen[i];
@@ -80,7 +80,7 @@ function migrateLegacySave(save) {
         name,
         gender: rnd(0, 1) === 0 ? 'm' : 'f',
         titel: familienTitel,
-        beziehung: rnd(15, 55),
+        beziehung: rnd(40, 60),
         status: 'familie'
       });
     }
@@ -113,22 +113,44 @@ function migrateLegacySave(save) {
   if (!('kinder' in save.family)) save.family.kinder = 0;
 
   if (!save.beziehungen || typeof save.beziehungen !== 'object') {
-    save.beziehungen = generateBeziehungenPool();
+    save.beziehungen = generateBeziehungenPool(BEZIEHUNGS_CONFIG.einwohnerGesamt, save.gender);
   }
   if (!Array.isArray(save.beziehungen.personen) || save.beziehungen.personen.length === 0) {
-    save.beziehungen = generateBeziehungenPool();
+    save.beziehungen = generateBeziehungenPool(BEZIEHUNGS_CONFIG.einwohnerGesamt, save.gender);
   }
   if (!save.beziehungen.config || typeof save.beziehungen.config !== 'object') {
-    save.beziehungen.config = { einwohnerGesamt: 100, titelAnteile: { unfreier: 0.15, buerger: 0.50, patrizier: 0.20, baron: 0.15 } };
+    save.beziehungen.config = {
+      einwohnerGesamt: save.beziehungen.personen.length,
+      basisEinwohnerGesamt: BEZIEHUNGS_CONFIG.einwohnerGesamt,
+      startKinderGesamt: 0,
+      titelAnteile: { unfreier: 0.15, buerger: 0.50, patrizier: 0.20, baron: 0.15 }
+    };
   }
   if (typeof save.beziehungen.config.interaktionenProJahr !== 'number') {
     save.beziehungen.config.interaktionenProJahr = 5;
   }
+  if (typeof save.beziehungen.config.basisEinwohnerGesamt !== 'number') {
+    save.beziehungen.config.basisEinwohnerGesamt = Math.max(0, save.beziehungen.personen.length - (save.beziehungen.config.startKinderGesamt || 0));
+  }
+  if (typeof save.beziehungen.config.startKinderGesamt !== 'number') {
+    save.beziehungen.config.startKinderGesamt = 0;
+  }
+  save.beziehungen.config.einwohnerGesamt = save.beziehungen.personen.length;
+
+  const sollHeiratsKandidaten = save.beziehungen.config.startKinderGesamt > 0;
+  const spielerAlter = Number.isInteger(save.age) && save.age >= 0 ? save.age : 0;
+  const kandidatinnenOhneMarker = sollHeiratsKandidaten
+    ? save.beziehungen.personen.filter(p => p.gender !== save.gender && Number.isInteger(p.alter) && p.alter >= spielerAlter && p.alter <= spielerAlter + 3)
+    : [];
+  const hatKandidatenMarker = save.beziehungen.personen.some(p => p.heiratsKandidat === true);
+  const heuristischeKandidatenIds = !hatKandidatenMarker && sollHeiratsKandidaten
+    ? new Set(kandidatinnenOhneMarker.slice(0, save.beziehungen.config.startKinderGesamt).map(p => String(p.id)))
+    : null;
 
   save.beziehungen.personen = save.beziehungen.personen
     .filter(p => p && typeof p === 'object')
     .map((p, idx) => {
-      const alter = Number.isInteger(p.alter) && p.alter > 0 ? p.alter : rnd(16, 55);
+      const alter = Number.isInteger(p.alter) && p.alter >= 0 ? p.alter : rnd(16, 55);
       const maxAlter = Number.isInteger(p.maxAlter) && p.maxAlter >= alter
         ? p.maxAlter
         : alter + rnd(0, Math.max(0, 80 - alter));
@@ -141,6 +163,7 @@ function migrateLegacySave(save) {
         maxAlter,
         titel: ['Unfreier', 'Bürger', 'Patrizier', 'Baron'].includes(p.titel) ? p.titel : 'Bürger',
         beziehung: clamp(typeof p.beziehung === 'number' ? p.beziehung : 0, -100, 100),
+        heiratsKandidat: p.heiratsKandidat === true || Boolean(heuristischeKandidatenIds && heuristischeKandidatenIds.has(String(p.id))),
         status: p.status === 'ehepartner' ? 'ehepartner' : 'single'
       };
     });
@@ -169,6 +192,36 @@ function migrateLegacySave(save) {
       save.pendingTitelAufstieg = null;
     }
   }
+
+  if (!save.rathaus || typeof save.rathaus !== 'object') save.rathaus = {};
+  if (!save.rathaus.aemter || typeof save.rathaus.aemter !== 'object') save.rathaus.aemter = {};
+  RATHAUS_AEMTER.forEach(def => {
+    const eintrag = save.rathaus.aemter[def.id];
+    if (!eintrag || typeof eintrag !== 'object') {
+      save.rathaus.aemter[def.id] = {
+        amtId: def.id,
+        inhaberTyp: null,
+        inhaberName: null,
+        personId: null,
+        startJahr: null,
+        endJahr: null,
+        bewerbungsFensterJahre: 2,
+        spielerBeworben: false,
+        bewerbungAnkuendigungFuerEndJahr: null
+      };
+      return;
+    }
+    if (!('amtId' in eintrag)) eintrag.amtId = def.id;
+    if (!['spieler', 'npc', null].includes(eintrag.inhaberTyp)) eintrag.inhaberTyp = null;
+    if (typeof eintrag.inhaberName !== 'string') eintrag.inhaberName = null;
+    if (typeof eintrag.personId !== 'string') eintrag.personId = null;
+    if (!Number.isInteger(eintrag.startJahr)) eintrag.startJahr = null;
+    if (!Number.isInteger(eintrag.endJahr)) eintrag.endJahr = null;
+    if (!Number.isInteger(eintrag.bewerbungsFensterJahre) || eintrag.bewerbungsFensterJahre < 1) eintrag.bewerbungsFensterJahre = 2;
+    if (typeof eintrag.spielerBeworben !== 'boolean') eintrag.spielerBeworben = false;
+    if (!Number.isInteger(eintrag.bewerbungAnkuendigungFuerEndJahr)) eintrag.bewerbungAnkuendigungFuerEndJahr = null;
+  });
+
   if (typeof save.maxAge !== 'number') save.maxAge = 80 + rnd(0, 15);
   if (typeof save.health !== 'number') save.health = defaults.health;
   if (typeof save.luck !== 'number') save.luck = defaults.luck;

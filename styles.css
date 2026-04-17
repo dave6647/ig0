@@ -64,6 +64,14 @@
   }
   .btn:hover { background: var(--card2); border-color: var(--gold); color: var(--gold-l); }
   .btn:active { opacity: 0.8; }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    color: var(--muted);
+    border-color: var(--border);
+    background: var(--card);
+  }
+  .btn:disabled:hover { background: var(--card); border-color: var(--border); color: var(--muted); }
   .btn-gold {
     background: var(--gold); border-color: var(--gold-l);
     color: #1a1208; font-weight: 500; text-align: center;

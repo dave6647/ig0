@@ -65,6 +65,7 @@ const TITEL_AUFSTIEGS_KOSTEN = {
 
 const BEZIEHUNGS_CONFIG = {
   einwohnerGesamt: 100,
+  startKinderGesamt: 6,
   interaktionenProJahr: 5,
   titelAnteile: {
     unfreier: 0.15,
@@ -73,6 +74,15 @@ const BEZIEHUNGS_CONFIG = {
     baron: 0.15
   }
 };
+
+const RATHAUS_WAHL_CHANCE = 0.75;
+const RATHAUS_AEMTER = [
+  { id: 'kerkermeister', name: 'Kerkermeister', titelMin: 'Bürger', statKey: 'fitness', statName: 'Körperkraft', statMin: 50, amtsdauer: 6 },
+  { id: 'ratsgehilfe', name: 'Ratsgehilfe', titelMin: 'Bürger', statKey: 'bildung', statName: 'Bildung', statMin: 65, amtsdauer: 6 },
+  { id: 'hauptmann', name: 'Hauptmann', titelMin: 'Patrizier', statKey: 'fitness', statName: 'Körperkraft', statMin: 65, amtsdauer: 6 },
+  { id: 'ratsherr', name: 'Ratsherr', titelMin: 'Patrizier', statKey: 'bildung', statName: 'Bildung', statMin: 75, amtsdauer: 6 },
+  { id: 'buergermeister', name: 'Bürgermeister', titelMin: 'Baron', statKey: null, statName: '', statMin: 0, amtsdauer: 10 }
+];
 
 const START_TITEL_STUFEN = ['Unfreier', 'Bürger', 'Patrizier'];
 
@@ -108,6 +118,27 @@ function randomTitelAusPool(pool) {
   return pool.splice(rnd(0, pool.length - 1), 1)[0];
 }
 
+function randomBeziehungsTitel() {
+  const roll = Math.random();
+  const anteile = BEZIEHUNGS_CONFIG.titelAnteile;
+  let summe = 0;
+
+  summe += anteile.unfreier;
+  if (roll < summe) return 'Unfreier';
+
+  summe += anteile.buerger;
+  if (roll < summe) return 'Bürger';
+
+  summe += anteile.patrizier;
+  if (roll < summe) return 'Patrizier';
+
+  return 'Baron';
+}
+
+function gegenGeschlecht(gender) {
+  return gender === 'f' ? 'm' : 'f';
+}
+
 function baueTitelPool(gesamt) {
   const counts = verteileAnteile(gesamt, BEZIEHUNGS_CONFIG.titelAnteile);
   const pool = [];
@@ -134,9 +165,9 @@ function generateFamilie(familienTitel) {
       name,
       gender,
       alter: geschwisterAlter,
-      maxAlter: geschwisterAlter + rnd(0, Math.max(0, 80 - geschwisterAlter)),
+      maxAlter: geschwisterAlter + rnd(10, Math.max(10, 85 - geschwisterAlter)),
       titel: familienTitel,
-      beziehung: rnd(15, 55),
+      beziehung: rnd(40, 60),
       status: 'familie'
     });
   }
@@ -153,9 +184,9 @@ function generateFamilie(familienTitel) {
     name: mutter,
     gender: 'f',
     alter: mutterAlter,
-    maxAlter: mutterAlter + rnd(0, Math.max(0, 80 - mutterAlter)),
+    maxAlter: mutterAlter + rnd(10, Math.max(10, 85 - mutterAlter)),
     titel: familienTitel,
-    beziehung: rnd(30, 75),
+    beziehung: rnd(40, 60),
     status: 'familie'
   });
   mitglieder.unshift({
@@ -165,9 +196,9 @@ function generateFamilie(familienTitel) {
     name: vater,
     gender: 'm',
     alter: vaterAlter,
-    maxAlter: vaterAlter + rnd(0, Math.max(0, 80 - vaterAlter)),
+    maxAlter: vaterAlter + rnd(10, Math.max(10, 85 - vaterAlter)),
     titel: familienTitel,
-    beziehung: rnd(30, 75),
+    beziehung: rnd(40, 60),
     status: 'familie'
   });
 
@@ -198,7 +229,30 @@ function baueAlterPool(gesamt) {
   return pool;
 }
 
-function generateBeziehungenPool(gesamt = BEZIEHUNGS_CONFIG.einwohnerGesamt) {
+function generateStartKinder(spielerGender, startIndex = 0) {
+  const personen = [];
+  const zielGender = gegenGeschlecht(spielerGender);
+
+  for (let i = 0; i < BEZIEHUNGS_CONFIG.startKinderGesamt; i++) {
+    const alter = rnd(0, 3);
+    personen.push({
+      id: `p${startIndex + i + 1}`,
+      gruppe: 'stadt',
+      name: randomName(zielGender),
+      gender: zielGender,
+      alter,
+      maxAlter: alter + rnd(10, Math.max(10, 85 - alter)),
+      titel: randomBeziehungsTitel(),
+      beziehung: 0,
+      heiratsKandidat: true,
+      status: 'single'
+    });
+  }
+
+  return personen;
+}
+
+function generateBeziehungenPool(gesamt = BEZIEHUNGS_CONFIG.einwohnerGesamt, spielerGender = null) {
   const personen = [];
   const titelPool = baueTitelPool(gesamt);
   const alterPool = baueAlterPool(gesamt);
@@ -213,9 +267,9 @@ function generateBeziehungenPool(gesamt = BEZIEHUNGS_CONFIG.einwohnerGesamt) {
       name: randomName('m'),
       gender: 'm',
       alter,
-      maxAlter: alter + rnd(0, Math.max(0, 80 - alter)),
+      maxAlter: alter + rnd(10, Math.max(10, 85 - alter)),
       titel: randomTitelAusPool(titelPool),
-      beziehung: rnd(-10, 10),
+      beziehung: 0,
       status: 'single'
     });
   }
@@ -227,11 +281,15 @@ function generateBeziehungenPool(gesamt = BEZIEHUNGS_CONFIG.einwohnerGesamt) {
       name: randomName('f'),
       gender: 'f',
       alter,
-      maxAlter: alter + rnd(0, Math.max(0, 80 - alter)),
+      maxAlter: alter + rnd(10, Math.max(10, 85 - alter)),
       titel: randomTitelAusPool(titelPool),
-      beziehung: rnd(-10, 10),
+      beziehung: 0,
       status: 'single'
     });
+  }
+
+  if (spielerGender === 'm' || spielerGender === 'f') {
+    personen.push(...generateStartKinder(spielerGender, personen.length));
   }
 
   for (let i = personen.length - 1; i > 0; i--) {
@@ -241,7 +299,9 @@ function generateBeziehungenPool(gesamt = BEZIEHUNGS_CONFIG.einwohnerGesamt) {
 
   return {
     config: {
-      einwohnerGesamt: gesamt,
+      einwohnerGesamt: personen.length,
+      basisEinwohnerGesamt: gesamt,
+      startKinderGesamt: spielerGender === 'm' || spielerGender === 'f' ? BEZIEHUNGS_CONFIG.startKinderGesamt : 0,
       titelAnteile: { ...BEZIEHUNGS_CONFIG.titelAnteile }
     },
     personen
@@ -251,7 +311,7 @@ function generateBeziehungenPool(gesamt = BEZIEHUNGS_CONFIG.einwohnerGesamt) {
 function stadtBevoelkerung() {
   if (!G) return [];
   if (!G.beziehungen || !Array.isArray(G.beziehungen.personen)) {
-    G.beziehungen = generateBeziehungenPool();
+    G.beziehungen = generateBeziehungenPool(BEZIEHUNGS_CONFIG.einwohnerGesamt, G.gender);
   }
   return G.beziehungen.personen;
 }
@@ -307,7 +367,7 @@ function incrementierePersonenAlter() {
         ? person.alter
         : standardAlterFuerPerson(person);
       if (!Number.isInteger(person.maxAlter)) {
-        person.maxAlter = basisAlter + rnd(0, Math.max(0, 80 - basisAlter));
+        person.maxAlter = basisAlter + rnd(10, Math.max(10, 85 - basisAlter));
       }
       person.alter = basisAlter + 1;
       if (person.alter >= person.maxAlter) {
@@ -327,7 +387,7 @@ function incrementierePersonenAlter() {
         ? person.alter
         : standardAlterFuerPerson(person);
       if (!Number.isInteger(person.maxAlter)) {
-        person.maxAlter = basisAlter + rnd(0, Math.max(0, 80 - basisAlter));
+        person.maxAlter = basisAlter + rnd(10, Math.max(10, 85 - basisAlter));
       }
       person.alter = basisAlter + 1;
       if (person.alter >= person.maxAlter) {
@@ -472,6 +532,339 @@ function titelVorteilePlaceholderText(titel) {
   return `Titel: ${titel}. Konkrete Titelvorteile folgen in einem späteren Update.`;
 }
 
+function rathausAmtDef(amtId) {
+  return RATHAUS_AEMTER.find(a => a.id === amtId) || null;
+}
+
+function rathausAmtEintragDefault(amtId) {
+  return {
+    amtId,
+    inhaberTyp: null,
+    inhaberName: null,
+    personId: null,
+    startJahr: null,
+    endJahr: null,
+    bewerbungsFensterJahre: 2,
+    spielerBeworben: false,
+    bewerbungAnkuendigungFuerEndJahr: null
+  };
+}
+
+function waehleNpcFuerAmtAusPersonen(personen, def) {
+  const kandidaten = (Array.isArray(personen) ? personen : []).filter(p =>
+    p &&
+    p.gruppe === 'stadt' &&
+    p.heiratsKandidat !== true &&
+    p.titel === def.titelMin
+  );
+  return kandidaten.length ? kandidaten[rnd(0, kandidaten.length - 1)] : null;
+}
+
+function baueStartRathausAemter(personen, jahr, spielerAlter = 0) {
+  const aemter = {};
+  RATHAUS_AEMTER.forEach(def => {
+    const eintrag = rathausAmtEintragDefault(def.id);
+    if (spielerAlter < 18) {
+      const kandidat = waehleNpcFuerAmtAusPersonen(personen, def);
+      if (kandidat) {
+        eintrag.inhaberTyp = 'npc';
+        eintrag.inhaberName = kandidat.name;
+        eintrag.personId = kandidat.id;
+        eintrag.startJahr = jahr;
+        eintrag.endJahr = jahr + def.amtsdauer - 1;
+      }
+    }
+    aemter[def.id] = eintrag;
+  });
+  return aemter;
+}
+
+function setzeAmtVakant(amtId) {
+  if (!G?.rathaus?.aemter?.[amtId]) return;
+  const eintrag = G.rathaus.aemter[amtId];
+  eintrag.inhaberTyp = null;
+  eintrag.inhaberName = null;
+  eintrag.personId = null;
+  eintrag.startJahr = null;
+  eintrag.endJahr = null;
+  eintrag.bewerbungsFensterJahre = 2;
+  eintrag.bewerbungAnkuendigungFuerEndJahr = null;
+}
+
+function ensureRathausDaten() {
+  if (!G) return;
+  if (!G.rathaus || typeof G.rathaus !== 'object') G.rathaus = {};
+  if (!G.rathaus.aemter || typeof G.rathaus.aemter !== 'object') G.rathaus.aemter = {};
+
+  RATHAUS_AEMTER.forEach(def => {
+    const eintrag = G.rathaus.aemter[def.id];
+    if (!eintrag || typeof eintrag !== 'object') {
+      G.rathaus.aemter[def.id] = rathausAmtEintragDefault(def.id);
+      return;
+    }
+    if (!('inhaberTyp' in eintrag)) eintrag.inhaberTyp = null;
+    if (!('inhaberName' in eintrag)) eintrag.inhaberName = null;
+    if (!('personId' in eintrag)) eintrag.personId = null;
+    if (!Number.isInteger(eintrag.startJahr)) eintrag.startJahr = null;
+    if (!Number.isInteger(eintrag.endJahr)) eintrag.endJahr = null;
+    if (!Number.isInteger(eintrag.bewerbungsFensterJahre) || eintrag.bewerbungsFensterJahre < 1) eintrag.bewerbungsFensterJahre = 2;
+    if (!('spielerBeworben' in eintrag)) eintrag.spielerBeworben = false;
+    if (!Number.isInteger(eintrag.bewerbungAnkuendigungFuerEndJahr)) eintrag.bewerbungAnkuendigungFuerEndJahr = null;
+  });
+}
+
+function istAmtAktiv(eintrag) {
+  return !!eintrag && Number.isInteger(eintrag.endJahr) && G.year <= eintrag.endJahr && !!eintrag.inhaberTyp;
+}
+
+function amtsjahreBisWahl(eintrag) {
+  if (!eintrag || !Number.isInteger(eintrag.endJahr)) return 0;
+  return eintrag.endJahr - G.year + 1;
+}
+
+function bewerbungsFensterJahre(eintrag) {
+  if (!eintrag || !Number.isInteger(eintrag.bewerbungsFensterJahre) || eintrag.bewerbungsFensterJahre < 1) return 2;
+  return eintrag.bewerbungsFensterJahre;
+}
+
+function istBewerbungFuerAmtMoeglich(amtId) {
+  if (!G || G.age < 18) return false;
+  ensureRathausDaten();
+  const def = rathausAmtDef(amtId);
+  if (!def) return false;
+  const eintrag = G.rathaus.aemter[def.id];
+  if (!istAmtAktiv(eintrag)) return true;
+  if (eintrag.inhaberTyp !== 'npc') return false;
+  return amtsjahreBisWahl(eintrag) <= bewerbungsFensterJahre(eintrag);
+}
+
+function npcKandidatenFuerAmt(def) {
+  return stadtBevoelkerung().filter(p =>
+    p &&
+    p.gruppe === 'stadt' &&
+    p.heiratsKandidat !== true &&
+    p.titel === def.titelMin
+  );
+}
+
+function besetzeAmtMitNpc(def, optionen = {}) {
+  ensureRathausDaten();
+  const eintrag = G.rathaus.aemter[def.id];
+  const amtsdauerJahre = Number.isInteger(optionen.amtsdauerJahre) && optionen.amtsdauerJahre >= 1
+    ? optionen.amtsdauerJahre
+    : def.amtsdauer;
+  const fensterJahre = Number.isInteger(optionen.bewerbungsFensterJahre) && optionen.bewerbungsFensterJahre >= 1
+    ? optionen.bewerbungsFensterJahre
+    : 2;
+  const kandidaten = npcKandidatenFuerAmt(def);
+  const kandidat = kandidaten.length ? kandidaten[rnd(0, kandidaten.length - 1)] : null;
+
+  if (!kandidat) {
+    eintrag.inhaberTyp = null;
+    eintrag.inhaberName = null;
+    eintrag.personId = null;
+    eintrag.startJahr = null;
+    eintrag.endJahr = null;
+    eintrag.bewerbungsFensterJahre = 2;
+    return;
+  }
+
+  eintrag.inhaberTyp = 'npc';
+  eintrag.inhaberName = kandidat.name;
+  eintrag.personId = kandidat.id;
+  eintrag.startJahr = G.year;
+  eintrag.endJahr = G.year + amtsdauerJahre - 1;
+  eintrag.bewerbungsFensterJahre = fensterJahre;
+}
+
+function aktuellesSpielerAmt() {
+  if (!G || !G.rathaus?.aemter) return null;
+  for (const def of RATHAUS_AEMTER) {
+    const eintrag = G.rathaus.aemter[def.id];
+    if (eintrag?.inhaberTyp === 'spieler' && istAmtAktiv(eintrag)) {
+      return { def, eintrag };
+    }
+  }
+  return null;
+}
+
+function bewerbungsVoraussetzungen(def) {
+  const gruende = [];
+  if (titelIndex(G.titel) < titelIndex(def.titelMin)) {
+    gruende.push(`Titel mindestens ${def.titelMin}`);
+  }
+
+  if (def.statKey && (G[def.statKey] || 0) < def.statMin) {
+    gruende.push(`${def.statName} mindestens ${def.statMin}`);
+  }
+
+  return gruende;
+}
+
+function amtStatusText(def) {
+  ensureRathausDaten();
+  const eintrag = G.rathaus.aemter[def.id];
+  if (!istAmtAktiv(eintrag)) return 'Der Posten wird aktuell neu besetzt.';
+  if (eintrag.inhaberTyp === 'npc') {
+    const rest = amtsjahreBisWahl(eintrag);
+    const fenster = bewerbungsFensterJahre(eintrag);
+    if (rest > fenster) return `${eintrag.inhaberName || 'Unbekannt'} (${eintrag.startJahr}-${eintrag.endJahr}) · Bewerbung in ${rest - fenster} Jahren möglich`;
+    const bewerbungText = eintrag.spielerBeworben ? ' · Deine Bewerbung liegt vor' : ' · Bewerbung möglich';
+    return `${eintrag.inhaberName || 'Unbekannt'} (${eintrag.startJahr}-${eintrag.endJahr})${bewerbungText}`;
+  }
+  const inhaber = eintrag.inhaberTyp === 'spieler' ? 'Du' : (eintrag.inhaberName || 'Unbekannt');
+  return `${inhaber} (${eintrag.startJahr}-${eintrag.endJahr})`;
+}
+
+function aktualisiereRathausAemter() {
+  if (!G) return [];
+  ensureRathausDaten();
+  const meldungen = [];
+
+  RATHAUS_AEMTER.forEach(def => {
+    const eintrag = G.rathaus.aemter[def.id];
+    const warSpielerAmt = eintrag?.inhaberTyp === 'spieler';
+    const warAblauf = Number.isInteger(eintrag?.endJahr) && G.year > eintrag.endJahr;
+    const npcInhaberFehlt =
+      istAmtAktiv(eintrag) &&
+      eintrag.inhaberTyp === 'npc' &&
+      typeof eintrag.personId === 'string' &&
+      !stadtBevoelkerung().some(p => p.id === eintrag.personId);
+
+    if (warAblauf) {
+      if (warSpielerAmt) meldungen.push(`Deine Amtszeit als ${def.name} ist beendet.`);
+      setzeAmtVakant(def.id);
+    }
+
+    if (npcInhaberFehlt) {
+      const alterInhaber = eintrag.inhaberName || 'Ein Amtsinhaber';
+      meldungen.push(`${alterInhaber} (${def.name}) ist verstorben. Das Amt wird neu besetzt.`);
+      setzeAmtVakant(def.id);
+      besetzeAmtMitNpc(def, { amtsdauerJahre: 1, bewerbungsFensterJahre: 1 });
+      if (G.rathaus.aemter[def.id].inhaberTyp === 'npc') {
+        meldungen.push(`Übergangsbesetzung im Rathaus: ${G.rathaus.aemter[def.id].inhaberName} führt das Amt ${def.name} für 1 Jahr.`);
+      }
+    }
+
+    const aktuellerEintrag = G.rathaus.aemter[def.id];
+
+    if (istAmtAktiv(aktuellerEintrag) && aktuellerEintrag.inhaberTyp === 'npc') {
+      const rest = amtsjahreBisWahl(aktuellerEintrag);
+      const fenster = bewerbungsFensterJahre(aktuellerEintrag);
+      if (rest <= fenster && aktuellerEintrag.bewerbungAnkuendigungFuerEndJahr !== aktuellerEintrag.endJahr) {
+        aktuellerEintrag.bewerbungAnkuendigungFuerEndJahr = aktuellerEintrag.endJahr;
+        meldungen.push(`Für das Amt ${def.name} sind Bewerbungen jetzt möglich. Die Wahl findet im Jahr ${aktuellerEintrag.endJahr + 1} statt.`);
+      }
+      return;
+    }
+
+    if (!istAmtAktiv(aktuellerEintrag)) {
+      if (aktuellerEintrag.spielerBeworben) {
+        const gewonnen = Math.random() < RATHAUS_WAHL_CHANCE;
+        aktuellerEintrag.spielerBeworben = false;
+        aktuellerEintrag.bewerbungAnkuendigungFuerEndJahr = null;
+        if (gewonnen) {
+          aktuellerEintrag.inhaberTyp = 'spieler';
+          aktuellerEintrag.inhaberName = G.name;
+          aktuellerEintrag.personId = null;
+          aktuellerEintrag.startJahr = G.year;
+          aktuellerEintrag.endJahr = G.year + def.amtsdauer - 1;
+          aktuellerEintrag.bewerbungsFensterJahre = 2;
+          meldungen.push(`Wahl im Rathaus: Du wurdest als ${def.name} gewählt (bis Jahr ${aktuellerEintrag.endJahr}).`);
+          return;
+        }
+        meldungen.push(`Wahl im Rathaus: Du wurdest für das Amt ${def.name} nicht gewählt.`);
+      }
+
+      besetzeAmtMitNpc(def);
+      if (G.rathaus.aemter[def.id].inhaberTyp === 'npc') {
+        G.rathaus.aemter[def.id].spielerBeworben = false;
+        G.rathaus.aemter[def.id].bewerbungAnkuendigungFuerEndJahr = null;
+        meldungen.push(`Neuwahl im Rathaus: ${G.rathaus.aemter[def.id].inhaberName} übernimmt das Amt ${def.name}.`);
+      } else {
+        meldungen.push(`Für das Amt ${def.name} wurde kein geeigneter Kandidat gefunden. Ein Ersatzkandidat wird gesucht.`);
+      }
+    }
+  });
+
+  return meldungen;
+}
+
+function bewerbeAufRathausAmt(amtId) {
+  if (!G) return;
+  const def = rathausAmtDef(amtId);
+  if (!def) return;
+
+  if (G.age < 18) {
+    showModal('🏛️ Rathaus', 'Bewerbungen auf Rathausämter sind erst ab 18 Jahren möglich.', [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  ensureRathausDaten();
+  const eintrag = G.rathaus.aemter[def.id];
+
+  if (istAmtAktiv(eintrag) && eintrag.inhaberTyp === 'spieler') {
+    showModal('🏛️ Rathaus', `Du bist bereits ${def.name} (bis Jahr ${eintrag.endJahr}).`, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  const spielerAmt = aktuellesSpielerAmt();
+  if (spielerAmt && spielerAmt.def.id !== def.id) {
+    showModal('🏛️ Rathaus', `Du bekleidest bereits das Amt ${spielerAmt.def.name} bis Jahr ${spielerAmt.eintrag.endJahr}.`, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  if (!istBewerbungFuerAmtMoeglich(def.id)) {
+    const rest = istAmtAktiv(eintrag) ? amtsjahreBisWahl(eintrag) : 0;
+    const fenster = bewerbungsFensterJahre(eintrag);
+    const info = rest > fenster
+      ? `${def.name} ist aktuell bis Jahr ${eintrag.endJahr} besetzt (${eintrag.inhaberName}). Bewerbung ist erst in ${rest - fenster} Jahren möglich.`
+      : `Für ${def.name} ist aktuell keine Bewerbung möglich.`;
+    showModal('🏛️ Rathaus', info, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  const fehlt = bewerbungsVoraussetzungen(def);
+  if (fehlt.length) {
+    showModal('🏛️ Rathaus', `Du erfüllst die Voraussetzungen für ${def.name} noch nicht:<br><strong>${fehlt.join('<br>')}</strong>`, [{ label: 'Ok', action: closeModal }]);
+    return;
+  }
+
+  if (!istAmtAktiv(eintrag)) {
+    const gewonnen = Math.random() < RATHAUS_WAHL_CHANCE;
+    if (gewonnen) {
+      eintrag.inhaberTyp = 'spieler';
+      eintrag.inhaberName = G.name;
+      eintrag.personId = null;
+      eintrag.startJahr = G.year;
+      eintrag.endJahr = G.year + def.amtsdauer - 1;
+      eintrag.bewerbungsFensterJahre = 2;
+      eintrag.spielerBeworben = false;
+      addEventEntry(`Du wirst als ${def.name} gewählt. Die Amtszeit läuft bis Jahr ${eintrag.endJahr}.`, 'good', { ansehen: 5 });
+      showModal('🏛️ Wahl', `Du wurdest als ${def.name} gewählt. Amtszeit: Jahr ${eintrag.startJahr} bis ${eintrag.endJahr}.`, [{ label: 'Verstanden', action: openRathausMenu }]);
+    } else {
+      besetzeAmtMitNpc(def);
+      addEventEntry(`Du wirst bei der Wahl zum Amt ${def.name} nicht gewählt.`, 'event', {});
+      if (G.rathaus.aemter[def.id].inhaberTyp === 'npc') {
+        showModal('🏛️ Wahl', `Du wurdest nicht gewählt. ${G.rathaus.aemter[def.id].inhaberName} übernimmt das Amt ${def.name} bis Jahr ${G.rathaus.aemter[def.id].endJahr}.`, [{ label: 'Verstanden', action: openRathausMenu }]);
+      } else {
+        showModal('🏛️ Wahl', `Du wurdest nicht gewählt. Für ${def.name} fand sich kein geeigneter NPC-Kandidat, der Posten bleibt vakant.`, [{ label: 'Verstanden', action: openRathausMenu }]);
+      }
+    }
+  } else {
+    if (eintrag.spielerBeworben) {
+      showModal('🏛️ Bewerbung', `Für das Amt ${def.name} ist deine Bewerbung bereits eingereicht. Die Wahl findet im Jahr ${eintrag.endJahr + 1} statt.`, [{ label: 'Verstanden', action: openRathausAemterMenu }]);
+    } else {
+      eintrag.spielerBeworben = true;
+      addEventEntry(`Du reichst deine Bewerbung für das Amt ${def.name} ein. Die Wahl findet im Jahr ${eintrag.endJahr + 1} statt.`, 'event', {});
+      showModal('🏛️ Bewerbung', `Deine Bewerbung für ${def.name} wurde angenommen. Die Wahl findet im Jahr ${eintrag.endJahr + 1} statt.`, [{ label: 'Verstanden', action: openRathausAemterMenu }]);
+    }
+  }
+
+  writeSave(activeSlot, G);
+  renderGame();
+}
+
 function pruefeTitelAufstiegAktivierung() {
   if (!G || !G.pendingTitelAufstieg) return null;
   const pending = G.pendingTitelAufstieg;
@@ -526,8 +919,11 @@ function defaultStats(origin) {
 function newGame(slot, name, gender, origin, startYear, startFitness) {
   const s = defaultStats(origin);
   const familienTitel = rollStartFamilienTitel();
+  const jahr = parseInt(startYear);
+  const beziehungen = generateBeziehungenPool(BEZIEHUNGS_CONFIG.einwohnerGesamt, gender);
+  const rathaus = { aemter: baueStartRathausAemter(beziehungen.personen, jahr, 0) };
   return {
-    slot, name, gender, origin, year: parseInt(startYear),
+    slot, name, gender, origin, year: jahr,
     age: 0, dead: false,
     health: s.health, luck: s.luck, fitness: clamp(startFitness ?? rnd(1, 20), 1, 20), looks: s.looks,
     geschick: s.geschick,
@@ -541,7 +937,8 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     meister: false,
     betrieb: false,
     mitarbeiter: 0,
-    beziehungen: generateBeziehungenPool(),
+    beziehungen,
+    rathaus,
     titel: familienTitel,
     pendingTitelAufstieg: null,
     inventar: [],
@@ -618,6 +1015,7 @@ function ageUp() {
   }
   G.age++;
   G.year++;
+  const rathausMeldungen = aktualisiereRathausAemter();
   const npcTodesereignisse = incrementierePersonenAlter();
   const lehreAbgeschlossenDiesesJahr = warLehrling && !isLehrling();
   G.aktivitaetGenutzt = false;
@@ -724,6 +1122,10 @@ function ageUp() {
       addEventEntry('Du hast deine Lehre abgeschlossen und bist nun Geselle.', 'event', {});
       pushJahresPopup('Du hast deine Lehre abgeschlossen und bist nun Geselle.');
     }
+    rathausMeldungen.forEach(text => {
+      addEventEntry(text, 'event', {});
+      pushJahresPopup(text);
+    });
     npcTodesereignisse.forEach(text => pushJahresPopup(text));
 
     // Natural aging effects
@@ -1267,8 +1669,8 @@ function eulogy() {
   return e[rnd(0,e.length-1)];
 }
 
-const MALE_NAMES   = ['Heinrich','Wilhelm','Konrad','Friedrich','Otto','Berthold','Gottfried','Walther','Gerhard','Ekkehard'];
-const FEMALE_NAMES = ['Hildegard','Agnes','Mechthild','Adelheid','Kunigunde','Mathilde','Elisabeth','Gisela','Hedwig','Bertha'];
+const MALE_NAMES   = ['Heinrich','Wilhelm','Konrad','Friedrich','Otto','Berthold','Gottfried','Walther','Gerhard','Ekkehard','Albrecht','Arnold','Dietrich','Eberhard','Erhard','Hartmann','Johann','Ludwig','Nikolaus','Rudolf','Siegfried','Ulrich','Werner','Wolfgang','Lothar'];
+const FEMALE_NAMES = ['Hildegard','Agnes','Mechthild','Adelheid','Kunigunde','Mathilde','Elisabeth','Gisela','Hedwig','Bertha','Gertrud','Irmgard','Katharina','Margarete','Rosina','Sophia','Ursula','Verena','Johanna','Clara','Helena','Lucia','Magdalena','Theresia','Barbara'];
 function randomName(gender) {
   const pool = gender === 'f' ? FEMALE_NAMES : MALE_NAMES;
   return pool[rnd(0, pool.length-1)];

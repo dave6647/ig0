@@ -94,7 +94,7 @@ function updateCharPreview() {
 			<div class="char-avatar">${genderIcon(gender)}</div>
 			<div class="char-info">
 				<div class="char-name">${esc(name)}</div>
-				<div class="char-desc">Kind · Startkraft ${statDisplayValue(pendingStartFitness)}</div>
+				<div class="char-desc">Kind</div>
 			</div>
 			<div class="char-year" style="color:var(--gold)">${s.gold} 💰</div>
 		</div>`;
@@ -296,6 +296,10 @@ function personenNachBeziehungswertDesc() {
 	return [...stadtBevoelkerung()].sort((a, b) => (b.beziehung || 0) - (a.beziehung || 0));
 }
 
+function heiratsKandidaten() {
+	return personenNachBeziehungswertDesc().filter(p => p.heiratsKandidat === true);
+}
+
 function personAlterBeziehungsText(person) {
 	const alter = Number.isInteger(person?.alter) && person.alter >= 0 ? person.alter : '—';
 	const beziehung = typeof person?.beziehung === 'number' ? person.beziehung : 0;
@@ -304,20 +308,23 @@ function personAlterBeziehungsText(person) {
 
 function openBeziehungenMenu() {
 	const personen = stadtBevoelkerung();
+	const kandidaten = heiratsKandidaten().length;
 	const freunde = personen.filter(p => (p.beziehung || 0) >= 40).length;
 	const umworbene = personen.filter(p => p.gender !== G.gender && !G.family?.ehepartner && (p.beziehung || 0) >= 80).length;
 	const interaktionenUebrig = beziehungsInteraktionenUebrig();
 
 	showModal('💞 Beziehungen', `
 		<strong>Stadtbewohner:</strong> ${personen.length}<br>
+		<strong>Heiratskandidaten:</strong> ${kandidaten}<br>
 		<strong>Freunde:</strong> ${freunde}<br>
 		<strong>Umworbene:</strong> ${umworbene}<br>
 		<strong>Interaktionen übrig:</strong> ${interaktionenUebrig}/5<br>
 		<strong>Ehepartner/in:</strong> ${esc(G.family?.ehepartner || 'Niemand')}<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
-		<em style="color:var(--muted);font-size:0.8rem">Im Bereich Beziehungen findest du Familie, Freunde, Umworbene und alle Personen der Stadt.</em>
+		<em style="color:var(--muted);font-size:0.8rem">Im Bereich Beziehungen findest du Familie, Heiratskandidaten, Freunde, Umworbene und alle Personen der Stadt.</em>
 	`, [
 		{ label: '👪 Familie', action: openBeziehungenFamilieMenu },
+		{ label: '💍 Heiratskandidaten', action: openBeziehungenKandidatenMenu },
 		{ label: '🤝 Freunde', action: openBeziehungenFreundeMenu },
 		{ label: '💘 Umworbene', action: openBeziehungenUmworbeneMenu },
 		{ label: '🏘️ Alle Personen', action: openBeziehungenStadtMenu },
@@ -334,7 +341,7 @@ function openBeziehungenFamilieMenu() {
 			<div style="padding:0.55rem 0;border-bottom:1px solid var(--border);${istVerstorben ? 'opacity:0.55' : ''}">
 				<strong>${esc(p.name)}</strong> ${genderIcon(p.gender)} · ${p.rolle} · ${p.titel}${istVerstorben ? ' <em style="color:var(--muted)">†</em>' : ''}<br>
 				<span style="color:var(--muted);font-size:0.8rem">${personAlterBeziehungsText(p)}${istVerstorben ? ' · Verstorben' : ''}</span><br>
-				${istVerstorben ? '' : `<button class="btn btn-sm" style="margin-top:0.35rem" onclick="showPersonInteraktion('${p.id}')">Interagieren</button>`}
+				${istVerstorben ? '' : `<button class="btn btn-sm" style="margin-top:0.35rem" onclick="showPersonInteraktion('${p.id}', 'familie')">Interagieren</button>`}
 			</div>
 		`;
 		}).join('')
@@ -363,6 +370,28 @@ function openBeziehungenFreundeMenu() {
 	]);
 }
 
+function openBeziehungenKandidatenMenu() {
+	const kandidaten = heiratsKandidaten();
+	const body = kandidaten.length
+		? `<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${kandidaten.map(p => `
+			<div style="padding:0.55rem 0;border-bottom:1px solid var(--border)">
+				<strong>${esc(p.name)}</strong> ${genderIcon(p.gender)} · ${p.titel}<br>
+				<span style="color:var(--muted);font-size:0.8rem">${personAlterBeziehungsText(p)}</span><br>
+				<button class="btn btn-sm" style="margin-top:0.35rem" onclick="showPersonInteraktion('${p.id}', 'kandidaten')">Interagieren</button>
+			</div>
+		`).join('')}</div>`
+		: '<em style="color:var(--muted)">Keine Heiratskandidaten vorhanden.</em>';
+
+	showModal('💍 Heiratskandidaten', `
+		<strong>Gesamt:</strong> ${kandidaten.length}<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		${body}
+	`, [
+		{ label: 'Zurück', action: openBeziehungenMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
 function openBeziehungenUmworbeneMenu() {
 	const umworbene = personenNachBeziehungswertDesc().filter(p => p.gender !== G.gender && (p.beziehung || 0) >= 80 && p.status !== 'ehepartner');
 	const body = umworbene.length
@@ -381,7 +410,7 @@ function openBeziehungenStadtMenu() {
 		<div style="padding:0.55rem 0;border-bottom:1px solid var(--border)">
 			<strong>${esc(p.name)}</strong> ${genderIcon(p.gender)} · ${p.titel}<br>
 			<span style="color:var(--muted);font-size:0.8rem">${personAlterBeziehungsText(p)}</span><br>
-			<button class="btn btn-sm" style="margin-top:0.35rem" onclick="showPersonInteraktion('${p.id}')">Interagieren</button>
+			<button class="btn btn-sm" style="margin-top:0.35rem" onclick="showPersonInteraktion('${p.id}', 'stadt')">Interagieren</button>
 		</div>
 	`).join('');
 
@@ -395,10 +424,15 @@ function openBeziehungenStadtMenu() {
 	]);
 }
 
-function showPersonInteraktion(personId) {
+function showPersonInteraktion(personId, source = 'stadt') {
 	const person = findePerson(personId);
+	const backAction = source === 'familie'
+		? openBeziehungenFamilieMenu
+		: source === 'kandidaten'
+			? openBeziehungenKandidatenMenu
+			: openBeziehungenStadtMenu;
 	if (!person) {
-		showModal('Beziehungen', 'Person nicht gefunden.', [{ label: 'Zurück', action: openBeziehungenStadtMenu }]);
+		showModal('Beziehungen', 'Person nicht gefunden.', [{ label: 'Zurück', action: backAction }]);
 		return;
 	}
 	if (person.status === 'verstorben') {
@@ -429,7 +463,7 @@ function showPersonInteraktion(personId) {
 			{ label: 'Beleidigen', action: () => beziehungsAktionBeleidigen(person.id) },
 			...(canProposal ? [{ label: '💍 Um die Hand anhalten', action: () => umHandAnhalten(person.id) }] : [])
 		]),
-		{ label: 'Zurück zur Liste', action: () => person.gruppe === 'familie' ? openBeziehungenFamilieMenu() : openBeziehungenStadtMenu() },
+		{ label: 'Zurück zur Liste', action: backAction },
 		{ label: 'Schließen', action: closeModal }
 	]);
 }
@@ -474,14 +508,16 @@ function openMenu(which) {
 				<strong>Interaktionen übrig:</strong> ${beziehungsInteraktionenUebrig()}/${BEZIEHUNGS_CONFIG.interaktionenProJahr}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
 				<strong>Familienmitglieder:</strong> ${Array.isArray(G.family?.mitglieder) ? G.family.mitglieder.length : 0}<br>
+				<strong>Heiratskandidaten:</strong> ${heiratsKandidaten().length}<br>
 				<strong>Freunde:</strong> ${stadtBevoelkerung().filter(p => (p.beziehung || 0) >= 40).length}<br>
 				<strong>Umworbene:</strong> ${stadtBevoelkerung().filter(p => p.gender !== G.gender && (p.beziehung || 0) >= 80 && p.status !== 'ehepartner').length}<br>
 				<strong>Ehepartner/in:</strong> ${esc(G.family.ehepartner || 'Niemand')}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
-				<em style="color:var(--muted);font-size:0.8rem">Im Beziehungsmenü kannst du mit allen Personen der Stadt interagieren.</em>
+				<em style="color:var(--muted);font-size:0.8rem">Im Beziehungsmenü kannst du Heiratskandidaten, Familie und alle Personen der Stadt verwalten.</em>
 			`,
 			actions: [
 				{ label: '👪 Familie', action: openBeziehungenFamilieMenu },
+				{ label: '💍 Heiratskandidaten', action: openBeziehungenKandidatenMenu },
 				{ label: '🤝 Freunde', action: openBeziehungenFreundeMenu },
 				{ label: '💘 Umworbene', action: openBeziehungenUmworbeneMenu },
 				{ label: '🏘️ Alle Personen', action: openBeziehungenStadtMenu },
@@ -738,12 +774,20 @@ function openHeilerMenu(typ) {
 }
 
 function openRathausMenu() {
+	ensureRathausDaten();
+	aktualisiereRathausAemter();
+	if (activeSlot) writeSave(activeSlot, G);
 	const naechsterAufstieg = naechsterTitelAufstieg();
 	const titelStatus = G.pendingTitelAufstieg
 		? `Beantragt: ${G.pendingTitelAufstieg.nach} (gültig ab Jahr ${G.pendingTitelAufstieg.aktivAbJahr})`
 		: naechsterAufstieg
 			? `Nächster Aufstieg: ${naechsterAufstieg.von} zu ${naechsterAufstieg.nach} für ${naechsterAufstieg.kosten} Gold`
 			: 'Du hast bereits den höchsten Titel erreicht.';
+
+	const aktiveAemter = RATHAUS_AEMTER.filter(def => {
+		const eintrag = G?.rathaus?.aemter?.[def.id];
+		return istAmtAktiv(eintrag);
+	}).length;
 
 	const kannMeisterKaufen = isGeselle() && !G.meister;
 	const statusText = G.meister
@@ -756,14 +800,40 @@ function openRathausMenu() {
 		<strong>Adelstitel:</strong> ${G.titel}<br>
 		<strong>Titelstatus:</strong> ${titelStatus}<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<strong>Rathausämter:</strong> ${aktiveAemter}/${RATHAUS_AEMTER.length} besetzt<br>
+		<strong>Dein Alter:</strong> ${G.age} Jahre ${G.age < 18 ? '(Bewerbung ab 18)' : ''}<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
 		<strong>Meisterprüfung:</strong> 1000 Gold<br>
 		<strong>Status:</strong> ${statusText}<br>
 		<hr style="border-color:var(--border);margin:0.75rem 0">
-		<em style="color:var(--muted);font-size:0.8rem">Titelaufstiege werden erst im folgenden Jahr gültig. Mit Meistertitel kannst du im Berufsbereich Betriebe aufbauen und jährlich passives Einkommen erhalten.</em>
+		<em style="color:var(--muted);font-size:0.8rem">Bewerbung auf Ämter ab 18 Jahren. Wahlchance pro Bewerbung: 75%. Amtsdauer: 6 Jahre (Bürgermeister 10 Jahre). Titelaufstiege werden erst im folgenden Jahr gültig.</em>
 	`, [
+		{ label: '🏛️ Ämter anzeigen', action: openRathausAemterMenu },
 		...(!G.pendingTitelAufstieg && naechsterAufstieg ? [{ label: `Titelaufstieg kaufen (${naechsterAufstieg.kosten} 💰)`, action: kaufeTitelAufstieg }] : []),
 		...(kannMeisterKaufen ? [{ label: 'Meistertitel erwerben (1000 💰)', action: kaufeMeistertitel }] : []),
 		{ label: 'Zurück', action: () => openMenu('stadt') },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function openRathausAemterMenu() {
+	ensureRathausDaten();
+	const bewerbbareAemter = RATHAUS_AEMTER.filter(def => istBewerbungFuerAmtMoeglich(def.id));
+	const amtsUebersicht = RATHAUS_AEMTER.map(def => {
+		const voraussetzungen = [
+			`Titel: ${def.titelMin}`,
+			...(def.statKey ? [`${def.statName}: mindestens ${def.statMin}`] : ['Weitere Voraussetzungen folgen'])
+		].join(' · ');
+		return `<div style="padding:0.45rem 0;border-bottom:1px solid var(--border)"><strong>${def.name}</strong><br><span style="color:var(--muted);font-size:0.8rem">Status: ${amtStatusText(def)}</span><br><span style="color:var(--muted);font-size:0.8rem">Voraussetzungen: ${voraussetzungen}</span></div>`;
+	}).join('');
+
+	showModal('🏛️ Rathausämter', `
+		<div style="max-height:42vh;overflow-y:auto;padding-right:0.25rem">${amtsUebersicht}</div>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<em style="color:var(--muted);font-size:0.8rem">Bewerbungen sind 2 Jahre vor der Wahl möglich. Bewerben-Buttons erscheinen nur bei aktuell möglicher Wahl/Bewerbung.</em>
+	`, [
+		...bewerbbareAemter.map(def => ({ label: `Bewerben: ${def.name}`, action: () => bewerbeAufRathausAmt(def.id) })),
+		{ label: 'Zurück zum Rathaus', action: openRathausMenu },
 		{ label: 'Schließen', action: closeModal }
 	]);
 }
