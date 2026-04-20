@@ -16,6 +16,9 @@ function getSave(slot) {
 }
 
 function writeSave(slot, data) {
+  if (data && typeof aktualisiereAnsehen === 'function') {
+    aktualisiereAnsehen(data);
+  }
   const all = loadAllSaves();
   all[slot] = data;
   saveAllSaves(all);
@@ -229,6 +232,8 @@ function migrateLegacySave(save) {
   if (typeof save.looks !== 'number') save.looks = defaults.looks;
   if (typeof save.geschick !== 'number') save.geschick = defaults.geschick;
   if (typeof save.bildung !== 'number') save.bildung = 0;
+  if (typeof save.ansehen !== 'number') save.ansehen = 0;
+  if (!Array.isArray(save.ansehenDetails)) save.ansehenDetails = [];
   if (!save.stand) save.stand = save.lehre ? standFromLehre(save.lehre) : 'Kind';
   if (!save.beruf) save.beruf = save.lehre ? berufFromLehre(save.lehre) : 'Keine Lehre';
 

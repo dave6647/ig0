@@ -138,6 +138,7 @@ function confirmDelete(slot) {
 // ── GAME RENDER ──────────────────────────────────────────
 function renderGame() {
 	if (!G) return;
+	if (typeof aktualisiereAnsehen === 'function') aktualisiereAnsehen(G);
 	const icon = genderIcon(G.gender) + (G.lehre ? lehreIcon(G.lehre) : '');
 	document.getElementById('game-avatar').textContent = icon;
 	document.getElementById('game-name').textContent = G.name;
@@ -242,11 +243,11 @@ function chronikTooltip(changes = {}) {
 		health: 'Gesundheit',
 		fitness: 'Kraft',
 		luck: 'Zufriedenheit',
-		looks: 'Ansehen',
+		ansehen: 'Ansehen',
 		bildung: 'Bildung',
 		geschick: 'Geschick'
 	};
-	const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung', 'geschick'];
+	const keys = ['gold', 'health', 'fitness', 'luck', 'bildung', 'geschick', 'ansehen'];
 	const parts = keys
 		.filter(key => typeof changes[key] === 'number' && changes[key] !== 0)
 		.map(key => `${labels[key]}: ${formatDelta(changes[key])}`);
@@ -259,11 +260,11 @@ function renderChronikEffects(changes = {}) {
 		health: 'Gesundheit',
 		fitness: 'Kraft',
 		luck: 'Zufriedenheit',
-		looks: 'Ansehen',
+		ansehen: 'Ansehen',
 		bildung: 'Bildung',
 		geschick: 'Geschick'
 	};
-	const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung', 'geschick'];
+	const keys = ['gold', 'health', 'fitness', 'luck', 'bildung', 'geschick', 'ansehen'];
 	const chips = [];
 	keys.forEach(k => {
 		const val = changes[k] || 0;
@@ -430,6 +431,8 @@ function showPersonInteraktion(personId, source = 'stadt') {
 		? openBeziehungenFamilieMenu
 		: source === 'kandidaten'
 			? openBeziehungenKandidatenMenu
+			: source === 'wirtshaus'
+				? openWirtshausMenu
 			: openBeziehungenStadtMenu;
 	if (!person) {
 		showModal('Beziehungen', 'Person nicht gefunden.', [{ label: 'Zurück', action: backAction }]);
@@ -484,12 +487,11 @@ function openMenu(which) {
 				<strong>Krankheit:</strong> ${G.krank ? 'Erkrankt' : 'Keine bekannte Krankheit'}<br>
 				<strong>Zufriedenheit:</strong> ${statDisplayValue(G.luck)}<br>
 				<strong>Verheiratet:</strong> ${G.family?.ehepartner ? `Ja, mit ${esc(G.family.ehepartner)}` : 'Nein'}<br>
-				<strong>Ansehen:</strong> ${statDisplayValue(G.looks)}<br>
+				<strong>Ansehen:</strong> ${statDisplayValue(G.ansehen || 0)}<br>
 				<strong>Kraft:</strong> ${statDisplayValue(G.fitness)}<br>
 				<strong>Bildung:</strong> ${bildungLabel(G.bildung)} (${statDisplayValue(G.bildung)})<br>
 				<strong>Geschick:</strong> ${statDisplayValue(G.geschick)}<br>
 				<strong>Inventar:</strong> ${G.inventar.length}/${inventarKapazitaet()} Plaetze belegt<br>
-				${G.aktiveEffekte?.bierJahre > 0 ? `<strong>Bier-Effekt:</strong> Noch ${G.aktiveEffekte.bierJahre} Jahre aktiv<br>` : ''}
 				<hr style="border-color:var(--border);margin:0.75rem 0">
 				<strong>Inventarinhalt:</strong><br>
 				${renderInventarListe()}
@@ -618,15 +620,6 @@ function openMenu(which) {
 						: ' · <span style="color:var(--green-l)">kostenlos (Kind)</span>';
 					showModal('📜 Schreiben lernen', `Du lernst eifrig: <span style="color:var(--gold)">+${gainB} Bildung</span>${kostenText}`, [{ label: 'Gut!', action: closeModal }]);
 				}}] : []),
-				...(!isKind() ? [{ label: '🍺 Im Wirtshaus feiern (+Zufriedenheit)', action: () => {
-					G.aktivitaetGenutzt = true;
-					const cost = rnd(2, 8);
-					const gainL = rnd(5, 12);
-					G.gold = Math.max(0, G.gold - cost); G.luck = clamp(G.luck + gainL, 0, 100);
-					addEventEntry('Du feierst im Wirtshaus und triffst viele interessante Leute.', 'good', { gold: -cost, luck: gainL });
-					writeSave(activeSlot, G); renderGame();
-					showModal('🍺 Wirtshaus', `Ein fröhlicher Abend! <span style="color:var(--gold)">+${gainL} Zufriedenheit</span> · <span style="color:var(--red-l)">−${cost} 💰</span>`, [{ label: 'Prost!', action: closeModal }]);
-				}}] : []),
 				{ label: 'Schließen', action: closeModal }
 			]
 		},
@@ -637,12 +630,14 @@ function openMenu(which) {
 				<strong>Verwaltung:</strong> Rathaus verfügbar<br>
 				<strong>Titel:</strong> ${G.titel}<br>
 				<strong>Markt:</strong> Waren und Ausruestung verfuegbar<br>
+				<strong>Wirtshaus:</strong> Treffpunkt der Stadt<br>
 				<strong>Schule:</strong> ${schoolStatusLabel()}<br>
 				<hr style="border-color:var(--border);margin:0.75rem 0">
 				<em style="color:var(--muted);font-size:0.8rem">Im Rathaus kannst du Titel kaufen und als Geselle die Meisterpruefung erwerben. Auf dem Markt kaufst du Waren fuer dein Inventar.</em>
 			`,
 			actions: [
 				{ label: '🏪 Markt', action: openMarktMenu },
+				{ label: '🍺 Wirtshaus', action: openWirtshausMenu },
 				{ label: '🏫 Schule', action: openSchuleMenu },
 				{ label: '🏛️ Rathaus', action: openRathausMenu },
 				{ label: 'Schließen', action: closeModal }
@@ -661,6 +656,101 @@ function openMenu(which) {
 	const m = menus[which];
 	if (!m) return;
 	showModal(m.title, m.body(), m.actions);
+}
+
+function wirtshausNpcPool() {
+	const alle = stadtBevoelkerung();
+	const basisGroesse = G?.beziehungen?.config?.basisEinwohnerGesamt || 100;
+	const basisPool = alle.filter(p => {
+		const match = String(p.id || '').match(/^p(\d+)$/);
+		if (!match) return false;
+		return Number(match[1]) <= basisGroesse;
+	});
+	return basisPool.length ? basisPool : alle;
+}
+
+function waehleZufaelligeWirtshausPerson() {
+	const pool = wirtshausNpcPool();
+	if (!pool.length) return null;
+	return pool[rnd(0, pool.length - 1)] || null;
+}
+
+function wirtshausBierTrinken() {
+	if (G.aktivitaetGenutzt) {
+		showModal('🍺 Wirtshaus', 'Du hast in diesem Jahr bereits eine Aktion durchgeführt.', [
+			{ label: 'Zurück zum Wirtshaus', action: openWirtshausMenu },
+			{ label: 'Schließen', action: closeModal }
+		]);
+		return;
+	}
+
+	G.aktivitaetGenutzt = true;
+	const gainL = 15;
+	G.luck = clamp(G.luck + gainL, 0, 100);
+	addEventEntry('Im Wirtshaus trinkst du ein Bier und hebst deine Stimmung.', 'good', { luck: gainL });
+	writeSave(activeSlot, G);
+	renderGame();
+	showModal('🍺 Bier', `Das Bier schmeckt hervorragend. <span style="color:var(--gold)">+${gainL} Zufriedenheit</span>.`, [
+		{ label: 'Zurück zum Wirtshaus', action: openWirtshausMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function wirtshausArmdruecken() {
+	if (G.aktivitaetGenutzt) {
+		showModal('🍺 Wirtshaus', 'Du hast in diesem Jahr bereits eine Aktion durchgeführt.', [
+			{ label: 'Zurück zum Wirtshaus', action: openWirtshausMenu },
+			{ label: 'Schließen', action: closeModal }
+		]);
+		return;
+	}
+
+	G.aktivitaetGenutzt = true;
+	const gainF = 4;
+	G.fitness = clamp(G.fitness + gainF, 0, 100);
+	addEventEntry('Du misst dich beim Armdrücken und gewinnst an Kraft.', 'good', { fitness: gainF });
+	writeSave(activeSlot, G);
+	renderGame();
+	showModal('💪 Armdrücken', `Ein harter Kampf am Tisch! <span style="color:var(--blue-l)">+${gainF} Kraft</span>.`, [
+		{ label: 'Zurück zum Wirtshaus', action: openWirtshausMenu },
+		{ label: 'Schließen', action: closeModal }
+	]);
+}
+
+function wirtshausMitPersonUnterhalten() {
+	const person = waehleZufaelligeWirtshausPerson();
+	if (!person) {
+		showModal('🍺 Wirtshaus', 'Im Wirtshaus ist heute niemand anzutreffen.', [
+			{ label: 'Zurück', action: openWirtshausMenu },
+			{ label: 'Schließen', action: closeModal }
+		]);
+		return;
+	}
+	showPersonInteraktion(person.id, 'wirtshaus');
+}
+
+function openWirtshausMenu() {
+	if (G.age < 14) {
+		showModal('🍺 Wirtshaus', 'Du kannst das Wirtshaus erst ab 14 Jahren betreten.', [
+			{ label: 'Zurück zur Stadt', action: () => openMenu('stadt') },
+			{ label: 'Schließen', action: closeModal }
+		]);
+		return;
+	}
+
+	showModal('🍺 Wirtshaus', `
+		<strong>Ort:</strong> Schankraum der Stadt<br>
+		<strong>Jahresaktion:</strong> ${G.aktivitaetGenutzt ? 'Bereits genutzt' : 'Verfügbar'}<br>
+		<strong>Beziehungsinteraktionen übrig:</strong> ${beziehungsInteraktionenUebrig()}/5<br>
+		<hr style="border-color:var(--border);margin:0.75rem 0">
+		<em style="color:var(--muted);font-size:0.8rem">Bier trinken und Armdrücken zählen als Jahresaktion. Mit Personen unterhalten läuft nur über das Beziehungssystem.</em>
+	`, [
+		{ label: G.aktivitaetGenutzt ? '🍺 Bier trinken (bereits genutzt)' : '🍺 Bier trinken (+15 Zufriedenheit)', action: wirtshausBierTrinken },
+		{ label: G.aktivitaetGenutzt ? '💪 Armdrücken (bereits genutzt)' : '💪 Armdrücken (+4 Kraft)', action: wirtshausArmdruecken },
+		{ label: '🗣️ Mit Person unterhalten', action: wirtshausMitPersonUnterhalten },
+		{ label: 'Zurück zur Stadt', action: () => openMenu('stadt') },
+		{ label: 'Schließen', action: closeModal }
+	]);
 }
 
 function openSchuleMenu() {
@@ -696,7 +786,6 @@ function renderInventarListe() {
 function openInventarMenu() {
 	showModal('🎒 Inventar', `
 		<strong>Plaetze:</strong> ${G.inventar.length}/${inventarKapazitaet()}<br>
-		${G.aktiveEffekte?.bierJahre > 0 ? `<strong>Bier-Effekt:</strong> Noch ${G.aktiveEffekte.bierJahre} Jahre aktiv<br>` : ''}
 		<hr style="border-color:var(--border);margin:0.75rem 0">
 		${renderInventarListe()}
 	`, [
@@ -707,10 +796,15 @@ function openInventarMenu() {
 
 function openMarktMenu() {
 	const items = Object.values(marktItemKatalog()).map(item => {
-		const disabled = G.gold < item.preis || inventarIstVoll();
-		const hinweis = inventarIstVoll()
-			? 'Inventar voll'
-			: (G.gold < item.preis ? 'Zu wenig Gold' : 'Kauf moeglich');
+		const altersBlock = G.age < 12
+			? 'Ab 12 Jahren'
+			: (item.id === 'bier' && G.age < 14 ? 'Bier ab 14 Jahren' : '');
+		const disabled = !!altersBlock || G.gold < item.preis || inventarIstVoll();
+		const hinweis = altersBlock
+			? altersBlock
+			: (inventarIstVoll()
+				? 'Inventar voll'
+				: (G.gold < item.preis ? 'Zu wenig Gold' : 'Kauf moeglich'));
 		return `<div style="padding:0.55rem 0;border-bottom:1px solid var(--border)"><strong>${esc(item.name)}</strong> · ${item.preis} Gold<br><span style="color:var(--muted);font-size:0.8rem">${esc(item.beschreibung)}</span><br><button class="btn btn-sm" style="margin-top:0.35rem" onclick="kaufeMarktItem('${item.id}')" ${disabled ? 'disabled' : ''}>Kaufen</button> <span style="color:var(--muted);font-size:0.78rem">${hinweis}</span></div>`;
 	}).join('');
 

@@ -4,7 +4,7 @@ let activeSlot = null;
 let pendingStartFitness = rnd(1, 20);
 
 function normalizeChanges(changes = {}) {
-  const keys = ['gold', 'health', 'fitness', 'luck', 'looks', 'bildung', 'geschick'];
+  const keys = ['gold', 'health', 'fitness', 'luck', 'bildung', 'geschick', 'ansehen'];
   const out = {};
   keys.forEach(k => {
     if (typeof changes[k] === 'number' && changes[k] !== 0) out[k] = changes[k];
@@ -40,7 +40,7 @@ function marktItemKatalog() {
       id: 'bier',
       name: 'Bier',
       preis: 25,
-      beschreibung: 'Sorgt 3 Jahre lang fuer +10 Zufriedenheit pro Jahr.'
+      beschreibung: 'Gibt bei Benutzung einmalig +15 Zufriedenheit.'
     },
     schwert: {
       id: 'schwert',
@@ -63,6 +63,36 @@ const TITEL_AUFSTIEGS_KOSTEN = {
   'Baron->Landsherr': 25000
 };
 
+const ANSEHEN_TITEL_BONI = {
+  'Unfreier': 10,
+  'Bürger': 15,
+  'Patrizier': 25,
+  'Baron': 40,
+  'Landsherr': 50
+};
+
+const ANSEHEN_REGELN = [
+  {
+    id: 'titel',
+    label: 'Titel',
+    bonus: (state) => ANSEHEN_TITEL_BONI[state?.titel] || 0
+  },
+  {
+    id: 'meistertitel',
+    label: 'Meistertitel',
+    bonus: (state) => state?.meister ? 10 : 0
+  },
+  {
+    id: 'rathausamt',
+    label: 'Rathausamt',
+    bonus: (state) => {
+      const spielerAmt = aktuellesSpielerAmtInState(state);
+      if (!spielerAmt) return 0;
+      return spielerAmt.def.id === 'buergermeister' ? 15 : 10;
+    }
+  }
+];
+
 const BEZIEHUNGS_CONFIG = {
   einwohnerGesamt: 100,
   startKinderGesamt: 6,
@@ -75,7 +105,7 @@ const BEZIEHUNGS_CONFIG = {
   }
 };
 
-const RATHAUS_WAHL_CHANCE = 0.75;
+const RATHAUS_WAHL_GRUNDCHANCE = 0.50;
 const RATHAUS_AEMTER = [
   { id: 'kerkermeister', name: 'Kerkermeister', titelMin: 'Bürger', statKey: 'fitness', statName: 'Körperkraft', statMin: 50, amtsdauer: 6 },
   { id: 'ratsgehilfe', name: 'Ratsgehilfe', titelMin: 'Bürger', statKey: 'bildung', statName: 'Bildung', statMin: 65, amtsdauer: 6 },
@@ -678,14 +708,7 @@ function besetzeAmtMitNpc(def, optionen = {}) {
 }
 
 function aktuellesSpielerAmt() {
-  if (!G || !G.rathaus?.aemter) return null;
-  for (const def of RATHAUS_AEMTER) {
-    const eintrag = G.rathaus.aemter[def.id];
-    if (eintrag?.inhaberTyp === 'spieler' && istAmtAktiv(eintrag)) {
-      return { def, eintrag };
-    }
-  }
-  return null;
+  return aktuellesSpielerAmtInState(G);
 }
 
 function bewerbungsVoraussetzungen(def) {
@@ -714,6 +737,50 @@ function amtStatusText(def) {
   }
   const inhaber = eintrag.inhaberTyp === 'spieler' ? 'Du' : (eintrag.inhaberName || 'Unbekannt');
   return `${inhaber} (${eintrag.startJahr}-${eintrag.endJahr})`;
+}
+
+function istAmtAktivInState(state, eintrag) {
+  return !!state && !!eintrag && Number.isInteger(eintrag.endJahr) && state.year <= eintrag.endJahr && !!eintrag.inhaberTyp;
+}
+
+function aktuellesSpielerAmtInState(state) {
+  if (!state || !state.rathaus?.aemter) return null;
+  for (const def of RATHAUS_AEMTER) {
+    const eintrag = state.rathaus.aemter[def.id];
+    if (eintrag?.inhaberTyp === 'spieler' && istAmtAktivInState(state, eintrag)) {
+      return { def, eintrag };
+    }
+  }
+  return null;
+}
+
+function berechneAnsehenKomponenten(state = G) {
+  if (!state) return [];
+  return ANSEHEN_REGELN.map(regel => {
+    const bonus = Math.max(0, Number(regel.bonus(state)) || 0);
+    return {
+      id: regel.id,
+      label: regel.label,
+      bonus,
+      aktiv: bonus > 0
+    };
+  });
+}
+
+function aktualisiereAnsehen(state = G) {
+  if (!state) return 0;
+  const details = berechneAnsehenKomponenten(state);
+  const gesamt = details.reduce((summe, eintrag) => summe + eintrag.bonus, 0);
+  state.ansehenDetails = details;
+  state.ansehen = gesamt;
+  return gesamt;
+}
+
+function rathausWahlChance(state = G) {
+  const ansehen = typeof state?.ansehen === 'number' ? state.ansehen : aktualisiereAnsehen(state);
+  if (ansehen >= 60) return RATHAUS_WAHL_GRUNDCHANCE + 0.20;
+  if (ansehen >= 30) return RATHAUS_WAHL_GRUNDCHANCE + 0.10;
+  return RATHAUS_WAHL_GRUNDCHANCE;
 }
 
 function aktualisiereRathausAemter() {
@@ -760,7 +827,7 @@ function aktualisiereRathausAemter() {
 
     if (!istAmtAktiv(aktuellerEintrag)) {
       if (aktuellerEintrag.spielerBeworben) {
-        const gewonnen = Math.random() < RATHAUS_WAHL_CHANCE;
+        const gewonnen = Math.random() < rathausWahlChance();
         aktuellerEintrag.spielerBeworben = false;
         aktuellerEintrag.bewerbungAnkuendigungFuerEndJahr = null;
         if (gewonnen) {
@@ -831,7 +898,7 @@ function bewerbeAufRathausAmt(amtId) {
   }
 
   if (!istAmtAktiv(eintrag)) {
-    const gewonnen = Math.random() < RATHAUS_WAHL_CHANCE;
+    const gewonnen = Math.random() < rathausWahlChance();
     if (gewonnen) {
       eintrag.inhaberTyp = 'spieler';
       eintrag.inhaberName = G.name;
@@ -840,7 +907,7 @@ function bewerbeAufRathausAmt(amtId) {
       eintrag.endJahr = G.year + def.amtsdauer - 1;
       eintrag.bewerbungsFensterJahre = 2;
       eintrag.spielerBeworben = false;
-      addEventEntry(`Du wirst als ${def.name} gewählt. Die Amtszeit läuft bis Jahr ${eintrag.endJahr}.`, 'good', { ansehen: 5 });
+      addEventEntry(`Du wirst als ${def.name} gewählt. Die Amtszeit läuft bis Jahr ${eintrag.endJahr}.`, 'good', {});
       showModal('🏛️ Wahl', `Du wurdest als ${def.name} gewählt. Amtszeit: Jahr ${eintrag.startJahr} bis ${eintrag.endJahr}.`, [{ label: 'Verstanden', action: openRathausMenu }]);
     } else {
       besetzeAmtMitNpc(def);
@@ -922,7 +989,7 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
   const jahr = parseInt(startYear);
   const beziehungen = generateBeziehungenPool(BEZIEHUNGS_CONFIG.einwohnerGesamt, gender);
   const rathaus = { aemter: baueStartRathausAemter(beziehungen.personen, jahr, 0) };
-  return {
+  const spielstand = {
     slot, name, gender, origin, year: jahr,
     age: 0, dead: false,
     health: s.health, luck: s.luck, fitness: clamp(startFitness ?? rnd(1, 20), 1, 20), looks: s.looks,
@@ -954,6 +1021,8 @@ function newGame(slot, name, gender, origin, startYear, startFitness) {
     krankheitHeilungGenutzt: false,
     schuleGenutzt: false,
   };
+  aktualisiereAnsehen(spielstand);
+  return spielstand;
 }
 
 // UI/navigation/render logic was moved to js/ui.js.
@@ -1033,13 +1102,6 @@ function ageUp() {
   }
 
   if (!G.aktiveEffekte) G.aktiveEffekte = { bierJahre: 0 };
-
-  if (G.aktiveEffekte.bierJahre > 0) {
-    G.luck = clamp(G.luck + 10, 0, 100);
-    G.aktiveEffekte.bierJahre -= 1;
-    addEventEntry('Das Bier aus deinem Vorrat hebt in diesem Jahr deine Stimmung.', 'good', { luck: 10 });
-    pushJahresPopup('Das Bier aus deinem Vorrat hebt in diesem Jahr deine Stimmung.', { luck: 10 });
-  }
 
   // Behandlungen wirken erst im nächsten Jahr.
   if (G.pendingBehandlung) {
@@ -1475,6 +1537,20 @@ function kaufeMarktItem(itemId) {
   const item = marktItem(itemId);
   if (!item) return;
 
+  if (G.age < 12) {
+    showModal('🏪 Markt', 'Einkäufe auf dem Markt sind erst ab 12 Jahren möglich.', [
+      { label: 'Zurück', action: openMarktMenu }
+    ]);
+    return;
+  }
+
+  if (item.id === 'bier' && G.age < 14) {
+    showModal('🏪 Markt', 'Bier kannst du erst ab 14 Jahren kaufen.', [
+      { label: 'Zurück', action: openMarktMenu }
+    ]);
+    return;
+  }
+
   if (inventarIstVoll()) {
     showModal('🏪 Markt', `Dein Inventar ist voll. Du hast ${G.inventar.length}/${inventarKapazitaet()} Plaetze belegt.`, [
       { label: 'Zurück', action: openMarktMenu }
@@ -1530,12 +1606,13 @@ function nutzeInventarItem(index) {
   }
 
   if (itemId === 'bier') {
-    G.aktiveEffekte.bierJahre = (G.aktiveEffekte.bierJahre || 0) + 3;
+    const gainL = 15;
+    G.luck = clamp(G.luck + gainL, 0, 100);
     G.inventar.splice(index, 1);
-    addEventEntry('Du lagerst Bier fuer die kommenden Jahre ein. Es wird deine Zufriedenheit fuer 3 Jahre steigern.', 'event', {});
+    addEventEntry('Du trinkst dein Bier und hebst sofort deine Stimmung.', 'good', { luck: gainL });
     writeSave(activeSlot, G);
     renderGame();
-    showModal('Inventar', 'Das Bier ist aktiviert und gibt dir fuer die naechsten 3 Jahre jeweils +10 Zufriedenheit.', [
+    showModal('Inventar', `Das Bier wirkt sofort: <span style="color:var(--gold)">+${gainL} Zufriedenheit</span>.`, [
       { label: 'Zurück zum Inventar', action: openInventarMenu },
       { label: 'Schließen', action: closeModal }
     ]);
@@ -1554,7 +1631,6 @@ function applyEffects(fx) {
   if (fx.luck   !== undefined) G.luck   = clamp(G.luck   + fx.luck,   0, 100);
   if (fx.gold   !== undefined) G.gold   = Math.max(0, G.gold + fx.gold);
   if (fx.fitness!== undefined) G.fitness= clamp(G.fitness+ fx.fitness, 0, 100);
-  if (fx.looks  !== undefined) G.looks  = clamp(G.looks  + fx.looks,   0, 100);
   if (fx.geschick !== undefined) G.geschick = clamp(G.geschick + fx.geschick, 0, 100);
 }
 
